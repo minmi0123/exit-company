@@ -1,0 +1,1699 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>회사에서 탈출하기</title>
+<style>
+  :root {
+    --bg: #1d1a22;
+    --panel: #2b2733;
+    --text: #f1ece4;
+    --muted: #a39cae;
+    --accent: #ffe27a;
+    --danger: #ff7a7a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Galmuri11", "DungGeunMo", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 16px;
+    gap: 10px;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  header, #msg {
+    width: 100%;
+    max-width: 720px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+  h1 { font-size: 18px; margin: 0; }
+  #hud { color: var(--muted); font-size: 14px; }
+  #hud b { color: var(--accent); font-weight: normal; }
+  #hud b.low { color: var(--danger); }
+  #stage {
+    position: relative;
+    width: 100%;
+    max-width: 720px;
+  }
+  #game {
+    display: block;
+    width: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #000;
+    border: 2px solid var(--panel);
+  }
+  /* 아래쪽: 사장님은 출구 옆이라 화면 위쪽에 자주 서서, 위에 두면 머리를 가린다 */
+  #bossbar {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(80%, 360px);
+    display: none;
+    flex-direction: column;
+    gap: 3px;
+    padding: 5px 8px;
+    background: rgba(20, 18, 26, 0.8);
+    border-radius: 6px;
+    font-size: 12px;
+    text-align: center;
+    pointer-events: none;
+  }
+  #bossbar.show { display: flex; }
+  #bossbar #bossbonus { color: var(--danger); }
+  #bossbar .track { height: 6px; background: #3a3544; border-radius: 3px; overflow: hidden; }
+  #bossfill { height: 100%; width: 100%; background: #e6b422; transition: width 0.15s; }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: rgba(20, 18, 26, 0.85);
+    text-align: center;
+    padding: 0 16px;
+  }
+  #overlay.show { display: flex; }
+  #overlay h2 { margin: 0; font-size: 28px; color: var(--accent); }
+  #overlay.lose h2 { color: var(--danger); }
+  #overlay p { margin: 0; color: var(--text); }
+  #overlay #best { color: var(--muted); font-size: 14px; }
+  #overlay button {
+    margin-top: 6px;
+    padding: 10px 20px;
+    font-size: 16px;
+    font-family: inherit;
+    background: var(--accent);
+    color: #1d1a22;
+    border: 0;
+    border-radius: 8px;
+  }
+  #msg {
+    margin: 0;
+    min-height: 1.4em;
+    font-size: 14px;
+    color: var(--text);
+  }
+  #items {
+    width: 100%;
+    max-width: 720px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  #items button {
+    background: var(--panel);
+    color: var(--text);
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 4px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  #items button:disabled { color: #5d5768; }
+  #items button:not(:disabled):active { background: #4a4458; }
+  #items .key { color: var(--muted); font-size: 12px; }
+  #status b { color: #7fd6a8; font-weight: normal; }
+  #status b.bad { color: var(--danger); }
+  #pad {
+    display: grid;
+    grid-template-columns: repeat(3, 64px);
+    grid-template-rows: repeat(3, 64px);
+    gap: 6px;
+  }
+  #pad button {
+    background: var(--panel);
+    color: var(--text);
+    border: 0;
+    border-radius: 10px;
+    font-size: 24px;
+    font-family: inherit;
+  }
+  #pad button:active { background: #4a4458; }
+  #pad .up    { grid-column: 2; grid-row: 1; }
+  #pad .left  { grid-column: 1; grid-row: 2; }
+  #pad .wait  { grid-column: 2; grid-row: 2; font-size: 14px; }
+  #pad .right { grid-column: 3; grid-row: 2; }
+  #pad .down  { grid-column: 2; grid-row: 3; }
+  #help { color: var(--muted); font-size: 12px; margin: 0; text-align: center; }
+  /* 키보드가 있는 환경에서는 패드를 숨긴다 */
+  @media (hover: hover) and (pointer: fine) {
+    #pad { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>회사에서 탈출하기</h1>
+  <div id="hud"><b id="floor">5F</b> · 멘탈 <b id="mental">20/20</b> · 턴 <b id="turn">0</b><span id="status"></span></div>
+</header>
+
+<div id="stage">
+  <canvas id="game"></canvas>
+  <div id="bossbar">
+    <span>야근 강요하는 사장님<span id="bossbonus"></span></span>
+    <div class="track"><div id="bossfill"></div></div>
+  </div>
+  <div id="overlay">
+    <h2 id="overlayTitle"></h2>
+    <p id="result"></p>
+    <p id="best"></p>
+    <button id="restart">다시 출근하기</button>
+  </div>
+</div>
+<p id="msg"></p>
+
+<div id="items">
+  <button data-item="coffee"><span class="key">1</span> 커피 ×<span id="n-coffee">0</span></button>
+  <button data-item="annual"><span class="key">2</span> 연차 ×<span id="n-annual">0</span></button>
+  <button data-item="half"><span class="key">3</span> 반차 ×<span id="n-half">0</span></button>
+</div>
+
+<div id="pad">
+  <button class="up" data-dir="up">▲</button>
+  <button class="left" data-dir="left">◀</button>
+  <button class="wait" data-dir="wait">대기</button>
+  <button class="right" data-dir="right">▶</button>
+  <button class="down" data-dir="down">▼</button>
+</div>
+<p id="help">방향키 / WASD 로 이동 · 적 쪽으로 이동하면 키보드 공격 · Space 로 대기 · 1/2/3 으로 아이템 · <span id="seed"></span></p>
+
+<script>
+// ─────────────────────────────────────────────
+// 1. 도트 데이터 (팔레트 + 16x16 격자)
+//    '.' = 투명. 나머지 글자는 PALETTE 의 키.
+// ─────────────────────────────────────────────
+const TILE = 16;
+
+const PALETTE = {
+  o: '#2b2230', // 외곽선
+  h: '#3a2c28', // 머리카락
+  s: '#f2c6a0', // 피부
+  w: '#f4f4f0', // 흰 셔츠
+  n: '#34406b', // 남색 바지
+  r: '#d9434a', // 사원증 목걸이줄
+  y: '#ffe27a', // 사원증
+  k: '#1b1b22', // 구두
+  // 사무실
+  f: '#8a93a6', // 카펫
+  g: '#7d8699', // 카펫 무늬
+  b: '#d8cbb5', // 벽
+  c: '#c2b49c', // 벽 그림자
+  m: '#9c8c72', // 걸레받이
+  d: '#9a6a44', // 책상 상판
+  e: '#7a5234', // 책상 모서리
+  t: '#3d4552', // 모니터 테두리
+  l: '#7fc8e8', // 모니터 화면
+  // 계단 · 출구
+  p: '#b9b2a4', // 계단 밝은 면
+  q: '#5e5868', // 계단 그림자
+  z: '#2a2631', // 계단 아래 어둠
+  v: '#5b6270', // 문틀
+  x: '#a8d8ea', // 유리
+  u: '#3fbf6f', // 비상구 초록
+  // 적 소품 (대문자 = 색을 바꾸지 않는 소품 전용)
+  P: '#fbfbf7', // 종이 · 맥주 거품
+  L: '#9aa3b5', // 종이 줄
+  Y: '#f2b33d', // 맥주
+  R: '#e04f5f', // 헤드폰 · 빨간 볼
+  K: '#2b2b33', // 헤드폰 머리띠
+};
+
+// 적은 모두 신입사원과 같은 몸 도트에 색만 바꾸고, 소품을 덧그린다
+// 일 못하는 동기
+const DONGGI_COLORS = {
+  h: '#7a5232', // 갈색 머리
+  w: '#bcdcf2', // 하늘색 셔츠
+  n: '#55555f', // 회색 바지
+  r: '#4a8fd9', // 파란 목걸이줄
+};
+
+// 요구가 많은 고객사 — 남색 정장 + 서류 뭉치
+const CLIENT_COLORS = {
+  h: '#1f1f24', w: '#4f5b73', n: '#2e3444', r: '#c0392b', y: '#4f5b73',
+};
+const CLIENT_PROP = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '............oooo',
+  '............oPPo',
+  '............oLPo',
+  '............oPLo',
+  '............oooo',
+  '................',
+  '................',
+  '................',
+];
+
+// 회식 좋아하는 팀장님 — 흰머리 + 빨간 볼 + 맥주잔
+const LEADER_COLORS = {
+  h: '#9a9a9a', w: '#e9eef5', n: '#3b3b46', r: '#7d3c98', y: '#e9eef5',
+};
+const LEADER_PROP = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '....R......R....',
+  '............PPPP',
+  '............oYYo',
+  '............oYYo',
+  '............oYYo',
+  '............oooo',
+  '................',
+  '................',
+  '................',
+];
+
+// 능력없는 상사 — 카멜 가디건 + 헤드폰
+const SANGSA_COLORS = {
+  h: '#4a3b2f', w: '#b08d57', n: '#5a4a3a', r: '#b08d57', y: '#b08d57',
+};
+const SANGSA_PROP = [
+  '.....KKKKKK.....',
+  '....K......K....',
+  '...K........K...',
+  '..K..........K..',
+  '..K..........K..',
+  '.RR..........RR.',
+  '.RR..........RR.',
+  '.RR..........RR.',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
+// 신입사원 — 정면, 걷기 2프레임 (다리만 다름)
+const HERO_BODY = [
+  '................',
+  '.....oooooo.....',
+  '....ohhhhhho....',
+  '...ohhhhhhhho...',
+  '...ohhhhhhhho...',
+  '...ohssssssho...',
+  '...ossossosso...',
+  '...osssssssso...',
+  '....osssssso....',
+  '...owwrwwrwwo...',
+  '..oswwwrrwwwso..',
+  '..oswwwyywwwso..',
+  '...onnnnnnnno...',
+];
+const HERO_LEGS_A = [
+  '....onnoonno....',
+  '....okkookko....',
+  '....ooo..ooo....',
+];
+const HERO_LEGS_B = [
+  '....okkoonno....',
+  '....ooo.okko....',
+  '.........ooo....',
+];
+
+const FLOOR = [
+  'ffffffffffffffff',
+  'ffffffffffffffff',
+  'ffgfffffffffgfff',
+  'ffffffffffffffff',
+  'ffffffffffffffff',
+  'ffffffgfffffffff',
+  'ffffffffffffffff',
+  'ffffffffffffffff',
+  'ffffffffffffffff',
+  'fffffffffffgffff',
+  'ffffffffffffffff',
+  'ffgfffffffffffff',
+  'ffffffffffffffff',
+  'ffffffffffffffff',
+  'ffffffffgfffffff',
+  'ffffffffffffffff',
+];
+
+// 벽 앞면 (바로 아래가 바닥일 때)
+const WALL = [
+  'bbbbbbbbbbbbbbbb',
+  'bbbbbbbbbbbbbbbb',
+  'bbbbbbbbbbbbbbbb',
+  'bbbbbbbbbbbbbbbb',
+  'bbbbbbbbbbbbbbbb',
+  'bbbbbbbbbbbbbbbb',
+  'bbbbbbbbbbbbbbbb',
+  'bbbbbbbbbbbbbbbb',
+  'bbbbbbbbbbbbbbbb',
+  'bbbbbbbbbbbbbbbb',
+  'cccccccccccccccc',
+  'cccccccccccccccc',
+  'cccccccccccccccc',
+  'mmmmmmmmmmmmmmmm',
+  'mmmmmmmmmmmmmmmm',
+  'oooooooooooooooo',
+];
+
+// 벽 윗면 (위에서 내려다본 벽 두께)
+const WALL_TOP = Array(TILE).fill('cccccccccccccccc');
+
+const DESK = [
+  'ffffffffffffffff',
+  'ffffottttttoffff',
+  'ffffotlllltoffff',
+  'ffffotlllltoffff',
+  'ffffotlllltoffff',
+  'ffffottttttoffff',
+  'fffffffoofffffff',
+  'oooooooooooooooo',
+  'oddddddddddddddo',
+  'oddddddddddddddo',
+  'oddddddddddddddo',
+  'oeeeeeeeeeeeeeeo',
+  'oooooooooooooooo',
+  'foffffffffffffof',
+  'foffffffffffffof',
+  'ffffffffffffffff',
+];
+
+// 내려가는 계단
+const STAIRS = [
+  'ffffffffffffffff',
+  'foooooooooooooof',
+  'foppppppppppppof',
+  'foqqqqqqqqqqqqof',
+  'fozzppppppppppof',
+  'fozzqqqqqqqqqqof',
+  'fozzzzppppppppof',
+  'fozzzzqqqqqqqqof',
+  'fozzzzzzppppppof',
+  'fozzzzzzqqqqqqof',
+  'fozzzzzzzzppppof',
+  'fozzzzzzzzqqqqof',
+  'fozzzzzzzzzzppof',
+  'fozzzzzzzzzzqqof',
+  'foooooooooooooof',
+  'ffffffffffffffff',
+];
+
+// 1층 로비 출구 (유리문 + 비상구 표시)
+const EXIT = [
+  'ffffffffffffffff',
+  'ffffuuuuuuuuffff',
+  'fvvvvvvvvvvvvvvf',
+  'fvxxxxxvvxxxxxvf',
+  'fvxwxxxvvxwxxxvf',
+  'fvxxwxxvvxxwxxvf',
+  'fvxxxxxvvxxxxxvf',
+  'fvxxxxxvvxxxxxvf',
+  'fvxxxxxvvxxxxxvf',
+  'fvxxxxxvvxxxxxvf',
+  'fvxxxxxvvxxxxxvf',
+  'fvxxxxxvvxxxxxvf',
+  'fvxxxxxvvxxxxxvf',
+  'fvxxxxxvvxxxxxvf',
+  'fvvvvvvvvvvvvvvf',
+  'ffffffffffffffff',
+];
+
+// 아이템 — 커피 (테이크아웃 컵)
+const COFFEE = [
+  '................',
+  '......oooo......',
+  '....oooooooo....',
+  '....okkkkkko....',
+  '....oooooooo....',
+  '....owwwwwwo....',
+  '....owwwwwwo....',
+  '....oddddddo....',
+  '....odyyyydo....',
+  '....oddddddo....',
+  '....owwwwwwo....',
+  '.....owwwwo.....',
+  '.....oooooo.....',
+  '................',
+  '................',
+  '................',
+];
+
+// 아이템 — 연차 (달력에 동그라미 친 날)
+const ANNUAL = [
+  '................',
+  '....o......o....',
+  '...oooooooooo...',
+  '...orrrrrrrro...',
+  '...orrrrrrrro...',
+  '...oooooooooo...',
+  '...owwwwwwwwo...',
+  '...owowowowwo...',
+  '...owwwwwwwwo...',
+  '...owowwrrrwo...',
+  '...owwwwrwrwo...',
+  '...owowwrrrwo...',
+  '...owwwwwwwwo...',
+  '...oooooooooo...',
+  '................',
+  '................',
+];
+
+// 아이템 — 반차 (반만 칠한 시계)
+const HALF = [
+  '................',
+  '................',
+  '......oooo......',
+  '....oowwyyoo....',
+  '...owwwwyyyyo...',
+  '..owwwwwoyyyyo..',
+  '..owwwwwoyyyyo..',
+  '..owwwwwoyyyyo..',
+  '..owwwwwoyyyyo..',
+  '..owwwwwwyyyyo..',
+  '...owwwwyyyyo...',
+  '...owwwwyyyyo...',
+  '....oowwyyoo....',
+  '......oooo......',
+  '................',
+  '................',
+];
+
+// 보스: 야근 강요하는 사장님 — 검은 정장 + 금색 넥타이 + 콧수염. 2배 크기로 그린다
+const BOSS_COLORS = {
+  h: '#2b2b2b', w: '#2f2f3a', n: '#23232b', r: '#e6b422', y: '#e6b422',
+};
+const BOSS_PROP = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....KKKKKK.....',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
+// ─────────────────────────────────────────────
+// 2. 도트 → 오프스크린 캔버스 (한 번만 그려 둔다)
+// ─────────────────────────────────────────────
+function makeSprite(rows, { flip = false, colors = {} } = {}) {
+  const pal = { ...PALETTE, ...colors };
+  const cv = document.createElement('canvas');
+  cv.width = TILE;
+  cv.height = TILE;
+  const ctx = cv.getContext('2d');
+  rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      if (ch === '.' || !pal[ch]) return;
+      ctx.fillStyle = pal[ch];
+      ctx.fillRect(flip ? TILE - 1 - x : x, y, 1, 1);
+    });
+  });
+  return cv;
+}
+
+// 소품 도트를 몸 위에 덮어쓴다 ('.' 은 몸 그대로)
+function overlay(rows, prop) {
+  if (!prop) return rows;
+  return rows.map((row, y) => [...row].map((ch, x) => (prop[y][x] !== '.' ? prop[y][x] : ch)).join(''));
+}
+
+// 걷기 2프레임 × 좌우
+function makeWalker(colors = {}, prop = null) {
+  const a = overlay([...HERO_BODY, ...HERO_LEGS_A], prop);
+  const b = overlay([...HERO_BODY, ...HERO_LEGS_B], prop);
+  return {
+    right: [makeSprite(a, { colors }), makeSprite(b, { colors })],
+    left: [makeSprite(a, { flip: true, colors }), makeSprite(b, { flip: true, colors })],
+  };
+}
+
+const SPRITES = {
+  floor: makeSprite(FLOOR),
+  wall: makeSprite(WALL),
+  wallTop: makeSprite(WALL_TOP),
+  desk: makeSprite(DESK),
+  stairs: makeSprite(STAIRS),
+  exit: makeSprite(EXIT),
+  hero: makeWalker(),
+  donggi: makeWalker(DONGGI_COLORS),
+  client: makeWalker(CLIENT_COLORS, CLIENT_PROP),
+  leader: makeWalker(LEADER_COLORS, LEADER_PROP),
+  sangsa: makeWalker(SANGSA_COLORS, SANGSA_PROP),
+  boss: makeWalker(BOSS_COLORS, BOSS_PROP),
+  coffee: makeSprite(COFFEE),
+  annual: makeSprite(ANNUAL),
+  half: makeSprite(HALF),
+};
+
+// ─────────────────────────────────────────────
+// 3. 수치 (밸런스 조정은 여기서만)
+//    2026-09-30 시뮬레이션(봇 120판, 보스 포함): 바로 돌진하는 봇 34% / 쉬었다 가는 봇 75%
+//    (더 쉽게: 사장님 hp 15 + maxSummons 1 → 62% / 90%)
+//    체력은 키보드 공격력(3)의 배수 경계를 조심 — 6→7 이면 2방→3방으로 급격히 어려워진다
+// ─────────────────────────────────────────────
+const HERO = {
+  maxMental: 20,
+  attack: 3,          // 키보드
+  regenEvery: 15,     // n턴마다 멘탈 +1
+};
+
+// ai: melee(쫓아와서 때림) · ranged(한 줄로 보이면 던짐) · grab(붙잡기) · wander(돌아다니다 부름)
+// short/obj: 문장에 넣을 이름 (받침에 따라 을/를)
+const ENEMY_TYPES = {
+  donggi: {
+    name: '일 못하는 동기',
+    short: '동기', obj: '동기를',
+    ai: 'melee',
+    hp: 6,            // 키보드 2방
+    attack: 3,
+    sight: 8,         // 이 거리 안에 들어오면 알아채고 쫓아온다
+    lines: [
+      '동기가 자기 실수를 떠넘겼다.',
+      '동기가 "이거 어떻게 해요?"를 열 번째 묻는다.',
+      '동기가 회의록을 대신 써 달라고 한다.',
+      '동기가 보고서 파일을 날렸다.',
+    ],
+  },
+  client: {
+    name: '요구가 많은 고객사',
+    short: '고객사', obj: '고객사를',
+    ai: 'ranged',
+    hp: 3,            // 키보드 1방. 대신 멀리서 때린다
+    attack: 3,
+    range: 5,         // 같은 줄(가로/세로)로 막힘 없이 이 거리 안이면 던진다
+    sight: 8,
+    lines: [
+      '고객사가 "전면 수정" 요청을 던졌다.',
+      '고객사: "어제 된다고 하셨잖아요."',
+      '고객사: "로고 좀 더 크게요. 근데 작게요."',
+      '고객사가 금요일 오후 6시에 메일을 던졌다.',
+    ],
+  },
+  leader: {
+    name: '회식 좋아하는 팀장님',
+    short: '팀장님', obj: '팀장님을',
+    ai: 'grab',
+    hp: 9,            // 키보드 3방
+    attack: 2,        // 붙잡기 대기 중(쿨다운)일 때 그냥 때리는 피해
+    grabDamage: 2,    // 붙잡힌 동안 매 턴
+    grabTurns: 3,     // 이만큼 지나면 저절로 풀려남
+    grabCooldown: 4,  // 풀어 준 뒤 다시 붙잡기까지
+    sight: 8,
+    lines: [
+      '팀장님이 잔을 채운다.',
+      '팀장님: "한 잔만 더~"',
+      '팀장님이 옛날 이야기를 시작했다.',
+    ],
+  },
+  sangsa: {
+    name: '능력없는 상사',
+    short: '상사', obj: '상사를',
+    ai: 'wander',
+    hp: 6,
+    attack: 0,        // 직접 공격하지 않는다
+    notice: 2,        // 이 거리 안에 들어오면 알아채고 적을 부른다
+    callCooldown: 8,  // 다시 부르기까지
+    lines: ['상사: "이거 누가 좀 해 봐." 주변 적이 몰려온다!'],
+  },
+};
+
+// 보스: 1층 출구 앞을 지킨다. 살아 있는 동안 출구가 잠긴다
+const BOSS = {
+  name: '야근 강요하는 사장님',
+  short: '사장님', obj: '사장님을',
+  ai: 'boss',
+  hp: 18,             // 키보드 6방
+  attack: 4,          // 대신 2턴에 한 번만 때린다
+  sight: 6,
+  summonEvery: 6,     // n턴마다 동기를 옆에 불러온다 ("긴급 회의")
+  maxSummons: 2,      // 불려 온 동기는 동시에 최대
+  firstSummonDelay: 6,// 알아챈 뒤 첫 소집까지 기다리는 턴
+  actEvery: 2,        // 바쁜 사장님: 2턴에 한 번 행동. 행동 직전 턴엔 머리 위 빨간 "!"
+  overtimeEvery: 8,   // 알아챈 뒤 n턴마다 퇴근 시간 30분 밀림 + 공격력 +1
+  overtimeMaxBonus: 3,
+  lines: [
+    '사장님: "요즘 애들은 끈기가 없어."',
+    '사장님: "내일 아침까지 되지?"',
+    '사장님: "나 때는 말이야…"',
+    '사장님: "퇴근? 일 다 했어?"',
+  ],
+};
+ENEMY_TYPES.boss = BOSS;
+
+// 층별 적 구성 (5F → 1F). 한 층에 한 종씩 새로 등장
+const ENEMIES_PER_FLOOR = {
+  5: { donggi: 2 },
+  4: { donggi: 2, client: 1 },
+  3: { donggi: 2, client: 1, leader: 1 },
+  2: { donggi: 2, client: 1, leader: 1, sangsa: 1 },
+  1: { donggi: 1, client: 1 },  // 보스 층은 가볍게 (사장님이 동기를 불러오므로)
+};
+
+// 상사가 쓰러지면 남은 적 공격력이 이만큼 오른다
+const SANGSA_DEATH_BUFF = 1;
+
+// 아이템. 층마다 min~max 개, chance 는 그 층에 나올 확률
+const ITEM_TYPES = {
+  coffee: { name: '커피', key: 1, min: 1, max: 1, chance: 0.8, heal: 5 },
+  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.2, turns: 5 },  // 무적. 강해서 드물게
+  half:   { name: '반차', key: 3, min: 1, max: 1, chance: 0.35, turns: 3 }, // 한 턴에 두 번 행동
+};
+
+// ─────────────────────────────────────────────
+// 4. 층 자동 생성 — 방 여러 개 + 복도
+//    # 벽  . 바닥  D 책상  > 계단  E 출구(1층)
+// ─────────────────────────────────────────────
+const MAP_W = 32;
+const MAP_H = 24;
+const TOP_FLOOR = 5;
+const BLOCKING = new Set(['#', 'D']);
+const STEPS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+// 시드가 같으면 같은 맵이 나온다 (버그 재현용)
+function mulberry32(a) {
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function randInt(rng, min, max) {
+  return min + Math.floor(rng() * (max - min + 1));
+}
+
+function center(room) {
+  return {
+    x: room.x + Math.floor(room.w / 2),
+    y: room.y + Math.floor(room.h / 2),
+  };
+}
+
+// 적이 길을 찾을 때는 출구도 벽이다 (적은 출구에 설 수 없다.
+// 이걸 빼면 잠긴 출구를 지름길로 착각해 제자리에 멈춘다 — 2026-09-30 시드 917686)
+const ENEMY_BLOCKING = new Set([...BLOCKING, 'E']);
+
+// 시작점에서 걸어갈 수 있는 칸까지의 거리 (막힌 칸은 -1)
+function distances(grid, from, blocking = BLOCKING) {
+  const dist = grid.map((row) => row.map(() => -1));
+  const queue = [from];
+  dist[from.y][from.x] = 0;
+  while (queue.length) {
+    const { x, y } = queue.shift();
+    for (const [dx, dy] of STEPS4) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (blocking.has(grid[ny][nx]) || dist[ny][nx] >= 0) continue;
+      dist[ny][nx] = dist[y][x] + 1;
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  return dist;
+}
+
+function countReachable(grid, from) {
+  return distances(grid, from).flat().filter((d) => d >= 0).length;
+}
+
+function countWalkable(grid) {
+  return grid.flat().filter((t) => !BLOCKING.has(t)).length;
+}
+
+function carveCorridor(grid, rng, a, b) {
+  const horizontalFirst = rng() < 0.5;
+  const [x1, y1, x2, y2] = [a.x, a.y, b.x, b.y];
+  for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+    grid[horizontalFirst ? y1 : y2][x] = '.';
+  }
+  for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+    grid[y][horizontalFirst ? x2 : x1] = '.';
+  }
+}
+
+function generateFloor(floorNo, rng) {
+  for (;;) {
+    const grid = Array.from({ length: MAP_H }, () => Array(MAP_W).fill('#'));
+    const rooms = [];
+
+    for (let tries = 0; tries < 300 && rooms.length < 8; tries++) {
+      const w = randInt(rng, 5, 9);
+      const h = randInt(rng, 4, 7);
+      const x = randInt(rng, 1, MAP_W - w - 1);
+      const y = randInt(rng, 1, MAP_H - h - 1);
+      // 방끼리 벽 한 칸 이상 떨어지게
+      const overlaps = rooms.some((r) =>
+        x < r.x + r.w + 1 && x + w + 1 > r.x && y < r.y + r.h + 1 && y + h + 1 > r.y);
+      if (overlaps) continue;
+      rooms.push({ x, y, w, h });
+    }
+    if (rooms.length < 5) continue;
+
+    for (const r of rooms) {
+      for (let y = r.y; y < r.y + r.h; y++) {
+        for (let x = r.x; x < r.x + r.w; x++) grid[y][x] = '.';
+      }
+    }
+
+    // 왼쪽 방부터 차례로 복도로 잇는다
+    rooms.sort((a, b) => center(a).x - center(b).x);
+    for (let i = 1; i < rooms.length; i++) {
+      carveCorridor(grid, rng, center(rooms[i - 1]), center(rooms[i]));
+    }
+
+    // 시작 방 = 무작위, 계단 = 시작점에서 가장 먼 방 칸
+    const startRoom = rooms[randInt(rng, 0, rooms.length - 1)];
+    const start = center(startRoom);
+    const dist = distances(grid, start);
+    let goal = null;
+    for (const r of rooms) {
+      if (r === startRoom) continue;
+      for (let y = r.y; y < r.y + r.h; y++) {
+        for (let x = r.x; x < r.x + r.w; x++) {
+          if (!goal || dist[y][x] > dist[goal.y][goal.x]) goal = { x, y };
+        }
+      }
+    }
+    // 책상: 길을 막지 않을 때만 놓는다
+    // 이때 계단/출구 칸은 벽으로 친다 — 계단/출구를 지나야만 닿는 막다른 칸이 생기면 안 된다
+    // (1층에서 사장님이 그런 칸에 서면 잠긴 출구 때문에 영영 못 깬다 — 2026-09-30 시드 917686)
+    grid[goal.y][goal.x] = '#';
+    // 계단/출구 칸 자체가 유일한 통로면 (책상이 없어도) 막다른 칸이 생긴다 → 맵을 새로 만든다
+    if (countReachable(grid, start) !== countWalkable(grid)) continue;
+    for (const r of rooms) {
+      if (r === startRoom || r.w < 6 || r.h < 5) continue;
+      const pairs = randInt(rng, 1, 2);
+      for (let i = 0; i < pairs; i++) {
+        const x = randInt(rng, r.x + 1, r.x + r.w - 3);
+        const y = randInt(rng, r.y + 1, r.y + r.h - 2);
+        if (grid[y][x] !== '.' || grid[y][x + 1] !== '.') continue;
+        grid[y][x] = 'D';
+        grid[y][x + 1] = 'D';
+        if (countReachable(grid, start) !== countWalkable(grid)) {
+          grid[y][x] = '.';
+          grid[y][x + 1] = '.';
+        }
+      }
+    }
+    grid[goal.y][goal.x] = floorNo === 1 ? 'E' : '>';
+
+    return { grid, start, rooms };
+  }
+}
+
+function roomAt(map, x, y) {
+  return map.rooms.find((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) || null;
+}
+
+// 아이템 배치: 시작점이 아닌 빈 바닥 (적과 겹치지 않게)
+function spawnItems(map, enemies, rng) {
+  const spots = [];
+  map.grid.forEach((row, y) => row.forEach((t, x) => {
+    const taken = (x === map.start.x && y === map.start.y)
+      || enemies.some((e) => e.x === x && e.y === y);
+    if (t === '.' && !taken) spots.push({ x, y });
+  }));
+  const items = [];
+  for (const [kind, type] of Object.entries(ITEM_TYPES)) {
+    if (rng() >= type.chance) continue;
+    const count = randInt(rng, type.min, type.max);
+    for (let i = 0; i < count && spots.length; i++) {
+      const { x, y } = spots.splice(randInt(rng, 0, spots.length - 1), 1)[0];
+      items.push({ kind, x, y });
+    }
+  }
+  return items;
+}
+
+// 적 배치: 시작점에서 6칸 이상 떨어진 바닥에만
+function spawnEnemies(map, floorNo, rng) {
+  const dist = distances(map.grid, map.start);
+  const spots = [];
+  map.grid.forEach((row, y) => row.forEach((t, x) => {
+    if (t === '.' && dist[y][x] >= 6) spots.push({ x, y });
+  }));
+  const enemies = [];
+  for (const [kind, count] of Object.entries(ENEMIES_PER_FLOOR[floorNo] || {})) {
+    for (let i = 0; i < count && spots.length; i++) {
+      const { x, y } = spots.splice(randInt(rng, 0, spots.length - 1), 1)[0];
+      enemies.push(makeEnemy(kind, x, y));
+    }
+  }
+  if (floorNo === 1) placeBoss(map, enemies);
+  return enemies;
+}
+
+function makeEnemy(kind, x, y) {
+  const type = ENEMY_TYPES[kind];
+  return {
+    kind, type, x, y, hp: type.hp, facing: -1, step: 0,
+    awake: false,     // 주인공을 알아챘는지
+    bonus: 0,         // 상사가 떠넘긴 공격력 / 사장님 야근 누적
+    cooldown: 0,      // 팀장님 붙잡기 / 상사 부르기 / 고객사 재장전 / 사장님 소집
+    anim: { fromX: x, fromY: y, start: 0 },
+  };
+}
+
+// 사장님은 출구 바로 앞 칸에 선다 (그 칸에 다른 적이 있으면 비켜 준다)
+function placeBoss(map, enemies) {
+  let exit = null;
+  map.grid.forEach((row, y) => row.forEach((t, x) => { if (t === 'E') exit = { x, y }; }));
+  const posts = STEPS4
+    .map(([dx, dy]) => ({ x: exit.x + dx, y: exit.y + dy }))
+    .filter((p) => map.grid[p.y][p.x] === '.' && !(p.x === map.start.x && p.y === map.start.y));
+  const post = posts.find((p) => !enemies.some((e) => e.x === p.x && e.y === p.y)) || posts[0];
+  const blocker = enemies.findIndex((e) => e.x === post.x && e.y === post.y);
+  if (blocker >= 0) enemies.splice(blocker, 1);
+  enemies.push(makeEnemy('boss', post.x, post.y));
+}
+
+// ─────────────────────────────────────────────
+// 5. 게임 상태
+// ─────────────────────────────────────────────
+const params = new URLSearchParams(location.search);
+
+function randomSeed() {
+  return Math.floor(Math.random() * 1e9);
+}
+
+const state = {
+  seed: 0,
+  turn: 0,
+  floor: TOP_FLOOR,
+  mental: HERO.maxMental,
+  map: null,
+  enemies: [],
+  items: [],          // 바닥에 떨어진 아이템
+  bag: { coffee: 0, annual: 0, half: 0 },
+  annualTurns: 0,     // 연차: 남은 무적 턴
+  halfTurns: 0,       // 반차: 남은 빠른 턴
+  halfBonus: false,   // 반차: 이번 행동이 "한 번 더" 인지
+  grab: null,         // 팀장님에게 붙잡힘 { by: 팀장님, turns: 남은 턴 }
+  overtime: 0,        // 퇴근 시간이 밀린 분 (18:00 + overtime)
+  over: false,        // 퇴근 성공 또는 멘탈 붕괴
+  rng: Math.random,   // 판 안의 무작위(상사 걸음, 대사). 시드가 같으면 같은 판
+  hero: { x: 0, y: 0, facing: 1, step: 0, anim: { fromX: 0, fromY: 0, start: 0 } },
+  popups: [],         // 피해 숫자 (연출)
+  shots: [],          // 고객사가 던진 서류 (연출)
+  shake: 0,
+};
+
+function enterFloor(floorNo) {
+  beginAction(); // 새 층에선 메시지를 새로 시작
+  state.floor = floorNo;
+  const rng = mulberry32(state.seed + floorNo * 7919);
+  state.map = generateFloor(floorNo, rng);
+  state.enemies = spawnEnemies(state.map, floorNo, rng);
+  state.items = spawnItems(state.map, state.enemies, rng);
+  const h = state.hero;
+  h.x = state.map.start.x;
+  h.y = state.map.start.y;
+  h.anim = { fromX: h.x, fromY: h.y, start: 0 };
+  state.grab = null;
+  state.overtime = 0;
+  state.popups = [];
+  state.shots = [];
+  say(floorNo === 1
+    ? '1F 로비. 그런데 사장님이 출구를 막고 있다! 퇴근 시간은 18:00.'
+    : floorNo + 'F. 계단을 찾아 내려가자.');
+  updateHud();
+}
+
+// 판마다 새 시드 = 새 맵. 같은 판을 다시 보려면 주소에 ?seed=번호
+function newRun(seed = randomSeed()) {
+  state.seed = seed;
+  state.rng = mulberry32(seed ^ 0x5eed);
+  document.getElementById('seed').textContent = '시드 ' + seed;
+  state.turn = 0;
+  state.mental = HERO.maxMental;
+  state.bag = { coffee: 0, annual: 0, half: 0 };
+  state.annualTurns = 0;
+  state.halfTurns = 0;
+  state.halfBonus = false;
+  state.over = false;
+  document.getElementById('overlay').className = '';
+  enterFloor(TOP_FLOOR);
+}
+
+function tileAt(x, y) {
+  if (y < 0 || y >= MAP_H || x < 0 || x >= MAP_W) return '#';
+  return state.map.grid[y][x];
+}
+
+function enemyAt(x, y) {
+  return state.enemies.find((e) => e.x === x && e.y === y);
+}
+
+// 적이 설 수 없는 칸 (출구 문 위에 서면 영영 못 나가므로 출구도 막는다)
+function occupied(x, y) {
+  return BLOCKING.has(tileAt(x, y))
+    || tileAt(x, y) === 'E'
+    || enemyAt(x, y)
+    || (state.hero.x === x && state.hero.y === y);
+}
+
+function bossAlive() {
+  return state.enemies.some((e) => e.type.ai === 'boss');
+}
+
+function clockText() {
+  const m = 18 * 60 + state.overtime;
+  return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
+}
+
+// ─────────────────────────────────────────────
+// 6. 턴 처리 — 주인공이 한 번 행동하면 적이 한 번씩 행동
+// ─────────────────────────────────────────────
+const DIRS = {
+  up: [0, -1],
+  down: [0, 1],
+  left: [-1, 0],
+  right: [1, 0],
+  wait: [0, 0],
+};
+
+function moveUnit(u, nx, ny) {
+  u.anim = { fromX: u.x, fromY: u.y, start: performance.now() };
+  if (nx !== u.x) u.facing = nx > u.x ? 1 : -1;
+  u.x = nx;
+  u.y = ny;
+  u.step ^= 1;
+}
+
+function act(dir) {
+  if (state.over) return;
+  beginAction();
+  const [dx, dy] = DIRS[dir];
+  const h = state.hero;
+  if (dx !== 0) h.facing = dx;
+
+  if (dir !== 'wait') {
+    const nx = h.x + dx;
+    const ny = h.y + dy;
+    const target = enemyAt(nx, ny);
+    if (target) {
+      heroAttack(target);
+    } else if (BLOCKING.has(tileAt(nx, ny))) {
+      state.shake = 6; // 막힘: 턴을 소모하지 않는다
+      return;
+    } else if (tileAt(nx, ny) === 'E' && bossAlive()) {
+      state.shake = 6; // 잠긴 출구: 턴을 소모하지 않는다
+      say('로비 문이 잠겨 있다. 사장님: "퇴근? 누가?"');
+      return;
+    } else if (state.grab) {
+      // 붙잡힌 동안: 이동은 못 하지만 턴은 흐른다 (반격·아이템은 가능)
+      state.shake = 4;
+      say('팀장님이 놓아주지 않는다… (연차·반차로 탈출)');
+    } else {
+      moveUnit(h, nx, ny);
+      pickUp();
+    }
+  }
+
+  endHeroAction();
+}
+
+// 주인공 행동 뒤 공통 처리: 계단/출구 → 반차 → 턴 경과 → 적 행동
+function endHeroAction() {
+  const h = state.hero;
+  const here = tileAt(h.x, h.y);
+  if (here === '>') {
+    enterFloor(state.floor - 1);
+    return;
+  }
+  if (here === 'E') {
+    finish(true);
+    return;
+  }
+
+  // 반차: 적이 움직이기 전에 한 번 더 행동
+  if (state.halfTurns > 0 && !state.halfBonus) {
+    state.halfBonus = true;
+    updateHud();
+    return;
+  }
+  state.halfBonus = false;
+
+  state.turn += 1;
+  if (state.turn % HERO.regenEvery === 0) {
+    state.mental = Math.min(HERO.maxMental, state.mental + 1);
+  }
+  if (state.floor === 1) overtimeTick();
+
+  enemiesAct();
+  if (state.annualTurns > 0) state.annualTurns -= 1;
+  if (state.halfTurns > 0) state.halfTurns -= 1;
+  updateHud();
+}
+
+// 1층: 사장님이 나를 알아챈 뒤부터 퇴근 시간이 밀리고, 밀릴수록 사장님이 세진다
+// (걸어가는 동안까지 세면 만나기 전에 이미 최대로 세져서 못 이긴다 — 2026-09-30 시뮬레이션)
+function overtimeTick() {
+  const boss = state.enemies.find((e) => e.type.ai === 'boss');
+  if (!boss || !boss.awake) return;
+  boss.awakeTurns = (boss.awakeTurns || 0) + 1;
+  if (boss.awakeTurns % BOSS.overtimeEvery !== 0) return;
+  state.overtime += 30;
+  let note = '';
+  if (boss.bonus < BOSS.overtimeMaxBonus) {
+    boss.bonus += 1;
+    note = ' 사장님 공격력 +1';
+  }
+  say('퇴근 시간이 ' + clockText() + ' 으로 밀렸다.' + note);
+}
+
+function pickUp() {
+  const h = state.hero;
+  const item = state.items.find((it) => it.x === h.x && it.y === h.y);
+  if (!item) return;
+  state.items = state.items.filter((it) => it !== item);
+  state.bag[item.kind] += 1;
+  const type = ITEM_TYPES[item.kind];
+  say(type.name + '를 주웠다. (' + type.key + '번으로 사용)');
+}
+
+function useItem(kind) {
+  if (state.over) return;
+  beginAction();
+  if (state.bag[kind] <= 0) {
+    say(ITEM_TYPES[kind].name + '가 없다.');
+    return; // 턴을 쓰지 않는다
+  }
+  state.bag[kind] -= 1;
+  const h = state.hero;
+  const type = ITEM_TYPES[kind];
+  if (kind === 'coffee') {
+    const before = state.mental;
+    state.mental = Math.min(HERO.maxMental, state.mental + type.heal);
+    popup(h.x, h.y, '+' + (state.mental - before), '#7fd6a8');
+    say('커피를 마셨다. 정신이 든다.');
+  } else if (kind === 'annual') {
+    state.annualTurns = type.turns;
+    say('연차를 냈다! ' + type.turns + '턴 동안 아무도 나를 건드릴 수 없다.');
+  } else if (kind === 'half') {
+    state.halfTurns = type.turns;
+    state.halfBonus = false;
+    say('반차를 냈다! ' + type.turns + '턴 동안 두 배로 빠르게 움직인다.');
+  }
+  // 연차·반차 = 회식 탈출
+  if (kind !== 'coffee' && state.grab) {
+    state.grab.by.cooldown = state.grab.by.type.grabCooldown;
+    state.grab = null;
+    say('회식에서 빠져나왔다!');
+  }
+  endHeroAction();
+}
+
+function heroAttack(e) {
+  e.hp -= HERO.attack;
+  popup(e.x, e.y, '-' + HERO.attack, '#ffe27a');
+  if (e.hp <= 0) {
+    removeEnemy(e);
+    return;
+  }
+  say('키보드로 ' + e.type.short + '에게 ' + HERO.attack + ' 피해.');
+  if (e.type.ai === 'wander') sangsaCall(e); // 맞으면 알아채고 부른다
+  else e.awake = true;
+}
+
+function removeEnemy(e) {
+  state.enemies = state.enemies.filter((o) => o !== e);
+  if (state.grab && state.grab.by === e) state.grab = null;
+  if (e.type.ai === 'boss') {
+    say('사장님을 먼저 퇴근시켰다! 로비 문이 열렸다.');
+  } else if (e.type.ai === 'wander') {
+    // 상사: 쓰러지면서 일을 떠넘긴다 → 남은 적 공격력 상승
+    for (const o of state.enemies) o.bonus += SANGSA_DEATH_BUFF;
+    say(e.type.obj + ' 먼저 퇴근시켰다. …그런데 일을 떠넘기고 갔다! 남은 적 공격력 +' + SANGSA_DEATH_BUFF);
+  } else {
+    say(e.type.obj + ' 먼저 퇴근시켰다.');
+  }
+}
+
+function attackOf(e) {
+  return e.type.attack + e.bonus;
+}
+
+function pickLine(e) {
+  return e.type.lines[Math.floor(state.rng() * e.type.lines.length)];
+}
+
+function enemiesAct() {
+  const h = state.hero;
+  const toHero = distances(state.map.grid, h, ENEMY_BLOCKING);
+  for (const e of [...state.enemies]) {
+    if (state.over) return;
+    if (e.cooldown > 0) e.cooldown -= 1;
+    const d = toHero[e.y][e.x];
+    const adjacent = Math.abs(e.x - h.x) + Math.abs(e.y - h.y) === 1;
+
+    if (e.type.ai === 'wander') {
+      sangsaTurn(e, d);
+      continue;
+    }
+    if (!e.awake && d >= 0 && d <= e.type.sight) e.awake = true;
+
+    let acted = false;
+    if (e.type.ai === 'boss') acted = bossTurn(e, adjacent);
+    else if (e.type.ai === 'grab') acted = leaderTurn(e, adjacent);
+    else if (e.type.ai === 'ranged') acted = clientTurn(e);
+    else if (adjacent) {
+      hurtHero(e, attackOf(e), pickLine(e));
+      acted = true;
+    }
+    if (!acted && e.awake) chase(e, toHero, d);
+  }
+}
+
+// 주인공 쪽으로 한 칸 (막혀 있으면 이번 턴은 쉰다)
+function chase(e, toHero, d) {
+  const next = STEPS4
+    .map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy }))
+    .find((n) => toHero[n.y][n.x] >= 0 && toHero[n.y][n.x] < d && !occupied(n.x, n.y));
+  if (next) moveUnit(e, next.x, next.y);
+}
+
+// 사장님: 알아채면 n턴마다 동기를 옆에 불러오고, 옆에 오면 때린다
+function bossTurn(e, adjacent) {
+  if (!e.awake) return true; // 알아채기 전엔 출구 앞에서 기다린다
+  if (!e.started) {
+    e.started = true;
+    e.cooldown = BOSS.firstSummonDelay;
+    e.busy = 0;
+  }
+  // 바쁜 사장님: actEvery 턴에 한 번만 움직이거나 때린다
+  if (BOSS.actEvery > 1) {
+    e.busy = (e.busy + 1) % BOSS.actEvery;
+    if (e.busy !== 0) return true;
+  }
+  const summoned = state.enemies.filter((o) => o.summoned).length;
+  if (e.cooldown === 0 && summoned < BOSS.maxSummons) {
+    const spot = STEPS4
+      .map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy }))
+      .find((p) => !occupied(p.x, p.y));
+    if (spot) {
+      const d = makeEnemy('donggi', spot.x, spot.y);
+      d.awake = true;
+      d.summoned = true;
+      d.bonus = e.bonus; // 야근한 만큼 불려 온 동기도 세다
+      state.enemies.push(d);
+      e.cooldown = BOSS.summonEvery;
+      say('사장님: "다들 모여, 긴급 회의다!" 동기가 불려 왔다.');
+      return true;
+    }
+  }
+  if (adjacent) {
+    hurtHero(e, attackOf(e), pickLine(e));
+    return true;
+  }
+  return false; // 쫓아간다
+}
+
+// 팀장님: 붙잡기 → 매 턴 멘탈 조금씩 → n턴 뒤 풀어 줌 → 한동안은 그냥 때림
+function leaderTurn(e, adjacent) {
+  const t = e.type;
+  if (state.grab && state.grab.by === e) {
+    state.grab.turns -= 1;
+    hurtHero(e, t.grabDamage + e.bonus, pickLine(e));
+    if (!state.over && state.grab && state.grab.turns <= 0) {
+      state.grab = null;
+      e.cooldown = t.grabCooldown;
+      say('팀장님: "1차만 하고 가~" 겨우 풀려났다.');
+    }
+    return true;
+  }
+  if (!adjacent) return false;
+  e.facing = state.hero.x > e.x ? 1 : state.hero.x < e.x ? -1 : e.facing;
+  if (e.cooldown === 0 && !state.grab) {
+    if (state.annualTurns > 0) {
+      say('연차 중이라 회식 제안을 정중히 거절했다.');
+      return true;
+    }
+    state.grab = { by: e, turns: t.grabTurns };
+    state.shake = 6;
+    say('팀장님: "오늘 회식 알지?" 붙잡혔다! (연차·반차로 탈출 / ' + t.grabTurns + '턴 뒤 풀려남)');
+    return true;
+  }
+  hurtHero(e, attackOf(e), '팀장님이 어깨를 툭 친다. "다음엔 꼭 와~"');
+  return true;
+}
+
+// 고객사: 같은 줄로 막힘 없이 보이면 던지고, 다음 턴은 쉰다
+function clientTurn(e) {
+  if (!e.awake || !lineOfFire(e)) return false;
+  if (e.cooldown > 0) return true; // 다음 요청 작성 중 (제자리)
+  const h = state.hero;
+  e.facing = h.x > e.x ? 1 : h.x < e.x ? -1 : e.facing;
+  state.shots.push({ fromX: e.x, fromY: e.y, toX: h.x, toY: h.y, start: performance.now() });
+  hurtHero(e, attackOf(e), pickLine(e));
+  e.cooldown = 2; // 턴 시작에 1 줄어드므로 "던지고 1턴 쉼"
+  return true;
+}
+
+function lineOfFire(e) {
+  const h = state.hero;
+  if (e.x !== h.x && e.y !== h.y) return false;
+  const dist = Math.abs(e.x - h.x) + Math.abs(e.y - h.y);
+  if (dist > e.type.range) return false;
+  const sx = Math.sign(h.x - e.x);
+  const sy = Math.sign(h.y - e.y);
+  for (let i = 1; i < dist; i++) {
+    const x = e.x + sx * i;
+    const y = e.y + sy * i;
+    if (BLOCKING.has(tileAt(x, y)) || enemyAt(x, y)) return false;
+  }
+  return true;
+}
+
+// 상사: 평소엔 돌아다니기만. 가까이 오면 같은 방 적을 부른다
+function sangsaTurn(e, d) {
+  if (e.cooldown === 0 && d >= 0 && d <= e.type.notice) {
+    sangsaCall(e);
+    return;
+  }
+  if (state.rng() < 0.5) {
+    const options = STEPS4
+      .map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy }))
+      .filter((n) => !occupied(n.x, n.y));
+    if (options.length) {
+      const n = options[Math.floor(state.rng() * options.length)];
+      moveUnit(e, n.x, n.y);
+    }
+  }
+}
+
+function sangsaCall(e) {
+  if (e.cooldown > 0) return;
+  e.cooldown = e.type.callCooldown;
+  const h = state.hero;
+  e.facing = h.x > e.x ? 1 : h.x < e.x ? -1 : e.facing;
+  // 같은 방 적. 상사가 복도에 있으면 6칸 안
+  const room = roomAt(state.map, e.x, e.y);
+  const near = distances(state.map.grid, e, ENEMY_BLOCKING);
+  let called = 0;
+  for (const o of state.enemies) {
+    if (o === e || o.type.ai === 'wander') continue;
+    const inRange = room
+      ? roomAt(state.map, o.x, o.y) === room
+      : near[o.y][o.x] >= 0 && near[o.y][o.x] <= 6;
+    if (inRange) {
+      o.awake = true;
+      called += 1;
+    }
+  }
+  say(called ? pickLine(e) : '상사: "이거 누가 좀 해 봐." …아무도 없다.');
+}
+
+function hurtHero(e, dmg, line) {
+  const h = state.hero;
+  e.facing = h.x > e.x ? 1 : h.x < e.x ? -1 : e.facing;
+  if (state.annualTurns > 0) {
+    popup(h.x, h.y, '0', '#7fd6a8');
+    say('연차 중이라 ' + e.type.short + '의 연락을 받지 않았다.');
+    return;
+  }
+  state.mental -= dmg;
+  state.shake = 8;
+  popup(h.x, h.y, '-' + dmg, '#ff7a7a');
+  say(line + ' 멘탈 -' + dmg);
+  if (state.mental <= 0) {
+    state.mental = 0;
+    finish(false);
+  }
+}
+
+// ─────────────────────────────────────────────
+// 7. 끝 — 퇴근 성공 / 멘탈 붕괴, 최고 기록
+//    기록: 0 = 퇴근 성공, 1~5 = 도달한 가장 낮은 층
+// ─────────────────────────────────────────────
+const BEST_KEY = 'exit-company.best';
+
+function loadBest() {
+  try {
+    const v = localStorage.getItem(BEST_KEY);
+    return v === null ? null : Number(v);
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveBest(reached) {
+  const prev = loadBest();
+  const best = prev === null ? reached : Math.min(prev, reached);
+  try {
+    localStorage.setItem(BEST_KEY, String(best));
+  } catch (e) {
+    // 저장이 막힌 환경(시크릿 창 등)에서는 기록만 못 남긴다
+  }
+  return best;
+}
+
+function finish(cleared) {
+  state.over = true;
+  updateHud();
+  const best = saveBest(cleared ? 0 : state.floor);
+  const overlay = document.getElementById('overlay');
+  document.getElementById('overlayTitle').textContent = cleared ? '퇴근 성공!' : '멘탈 붕괴…';
+  const late = state.overtime > 0
+    ? ' (야근 ' + (state.overtime >= 60 ? Math.floor(state.overtime / 60) + '시간 ' : '')
+      + (state.overtime % 60 ? (state.overtime % 60) + '분' : '') + ')'
+    : ' (정시 퇴근!)';
+  document.getElementById('result').textContent = cleared
+    ? '퇴근 시각 ' + clockText() + late + ' · 총 ' + state.turn + '턴'
+    : state.floor + 'F 에서 쓰러졌다. (' + state.turn + '턴)';
+  document.getElementById('best').textContent = '최고 기록: '
+    + (best === 0 ? '퇴근 성공' : best + 'F 까지');
+  setTimeout(() => {
+    overlay.className = cleared ? 'show' : 'show lose';
+  }, 250);
+}
+
+// 한 행동 동안 생긴 메시지를 모아서 보여 준다 (붙잡힘 + 피해가 한 턴에 같이 나오는 경우 등)
+let messages = [];
+
+function beginAction() {
+  messages = [];
+}
+
+function say(text) {
+  messages.push(text);
+  document.getElementById('msg').textContent = messages.join(' ');
+}
+
+function updateHud() {
+  document.getElementById('turn').textContent = state.turn;
+  document.getElementById('floor').textContent = state.floor + 'F';
+  const m = document.getElementById('mental');
+  m.textContent = state.mental + '/' + HERO.maxMental;
+  m.className = state.mental <= HERO.maxMental / 4 ? 'low' : '';
+
+  for (const kind of Object.keys(ITEM_TYPES)) {
+    document.getElementById('n-' + kind).textContent = state.bag[kind];
+    document.querySelector('#items [data-item="' + kind + '"]').disabled = state.bag[kind] <= 0;
+  }
+  const effects = [];
+  if (state.floor === 1) {
+    effects.push('<b' + (state.overtime > 0 ? ' class="bad"' : '') + '>퇴근 ' + clockText() + '</b>');
+  }
+  if (state.grab) effects.push('<b class="bad">회식 ' + state.grab.turns + '턴</b>');
+  if (state.annualTurns > 0) effects.push('<b>연차 ' + state.annualTurns + '턴</b>');
+  if (state.halfTurns > 0) effects.push('<b>반차 ' + state.halfTurns + '턴</b>');
+  document.getElementById('status').innerHTML = effects.map((t) => ' · ' + t).join('');
+
+  // 보스 체력 막대: 사장님이 알아챈 뒤부터
+  const boss = state.enemies.find((e) => e.type.ai === 'boss');
+  const bar = document.getElementById('bossbar');
+  bar.className = boss && boss.awake && !state.over ? 'show' : '';
+  if (boss) {
+    document.getElementById('bossfill').style.width = (100 * boss.hp / boss.type.hp) + '%';
+    document.getElementById('bossbonus').textContent = boss.bonus > 0 ? ' 공격력 +' + boss.bonus : '';
+  }
+}
+
+function popup(x, y, text, color) {
+  state.popups.push({ x, y, text, color, start: performance.now() });
+}
+
+// ─────────────────────────────────────────────
+// 8. 그리기 — 주인공을 따라가는 카메라
+// ─────────────────────────────────────────────
+const VIEW_W = 15;
+const VIEW_H = 11;
+const MOVE_MS = 100;    // 한 칸 이동 연출 시간
+const POPUP_MS = 600;   // 피해 숫자 표시 시간
+const SHOT_MS = 180;    // 서류가 날아가는 시간
+const canvas = document.getElementById('game');
+canvas.width = VIEW_W * TILE;
+canvas.height = VIEW_H * TILE;
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+function spriteFor(x, y) {
+  const t = tileAt(x, y);
+  if (t === '.') return SPRITES.floor;
+  if (t === 'D') return SPRITES.desk;
+  if (t === '>') return SPRITES.stairs;
+  if (t === 'E') return SPRITES.exit;
+  // 벽: 아래가 바닥이면 앞면, 주변에 바닥이 있으면 윗면, 아니면 안 그림
+  if (!BLOCKING.has(tileAt(x, y + 1)) || tileAt(x, y + 1) === 'D') return SPRITES.wall;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (tileAt(x + dx, y + dy) !== '#') return SPRITES.wallTop;
+    }
+  }
+  return null;
+}
+
+// 3x5 도트 숫자 (캔버스 글꼴은 이 크기에서 뭉개져서 직접 그린다)
+const PIXEL_FONT = {
+  0: ['111', '101', '101', '101', '111'],
+  1: ['010', '110', '010', '010', '111'],
+  2: ['111', '001', '111', '100', '111'],
+  3: ['111', '001', '111', '001', '111'],
+  4: ['101', '101', '111', '001', '001'],
+  5: ['111', '100', '111', '001', '111'],
+  6: ['111', '100', '111', '101', '111'],
+  7: ['111', '001', '010', '010', '010'],
+  8: ['111', '101', '111', '101', '111'],
+  9: ['111', '101', '111', '001', '111'],
+  '-': ['000', '000', '111', '000', '000'],
+  '+': ['000', '010', '111', '010', '000'],
+  '♪': ['011', '010', '010', '110', '110'],
+};
+
+function drawPixelText(text, x, y, color) {
+  const pixels = [];
+  [...text].forEach((ch, i) => {
+    (PIXEL_FONT[ch] || []).forEach((row, dy) => {
+      [...row].forEach((bit, dx) => {
+        if (bit === '1') pixels.push([x + i * 4 + dx, y + dy]);
+      });
+    });
+  });
+  // 테두리 먼저, 그 위에 색
+  ctx.fillStyle = PALETTE.o;
+  for (const [px, py] of pixels) ctx.fillRect(px - 1, py - 1, 3, 3);
+  ctx.fillStyle = color;
+  for (const [px, py] of pixels) ctx.fillRect(px, py, 1, 1);
+}
+
+function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+// 연출 중인 화면 위치 (픽셀)
+function screenPos(u, now) {
+  const t = Math.min(1, (now - u.anim.start) / MOVE_MS);
+  return {
+    x: (u.anim.fromX + (u.x - u.anim.fromX) * t) * TILE,
+    y: (u.anim.fromY + (u.y - u.anim.fromY) * t) * TILE,
+    hop: t < 1 ? -Math.round(Math.sin(t * Math.PI) * 2) : 0,
+  };
+}
+
+// scale 2 = 보스. 발은 제 칸에 두고 위·옆으로 크게 그린다
+function drawWalker(frames, u, now, scale = 1) {
+  const p = screenPos(u, now);
+  const set = u.facing < 0 ? frames.left : frames.right;
+  const size = TILE * scale;
+  const ox = (size - TILE) / 2;
+  const oy = size - TILE;
+  ctx.drawImage(set[u.step], Math.round(p.x) - ox, Math.round(p.y) - oy + p.hop, size, size);
+  return p;
+}
+
+function draw() {
+  const now = performance.now();
+  const h = state.hero;
+  const hp = screenPos(h, now);
+
+  const camX = Math.round(clamp(hp.x - (VIEW_W * TILE) / 2 + TILE / 2, 0, MAP_W * TILE - VIEW_W * TILE));
+  const camY = Math.round(clamp(hp.y - (VIEW_H * TILE) / 2 + TILE / 2, 0, MAP_H * TILE - VIEW_H * TILE));
+
+  let shakeX = 0;
+  if (state.shake > 0) {
+    shakeX = state.shake % 2 ? 1 : -1;
+    state.shake -= 1;
+  }
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(1, 0, 0, 1, -camX + shakeX, -camY);
+
+  const x0 = Math.floor(camX / TILE);
+  const y0 = Math.floor(camY / TILE);
+  for (let y = y0; y <= y0 + VIEW_H; y++) {
+    for (let x = x0; x <= x0 + VIEW_W; x++) {
+      const img = spriteFor(x, y);
+      if (img) ctx.drawImage(img, x * TILE, y * TILE);
+    }
+  }
+
+  for (const it of state.items) {
+    ctx.drawImage(SPRITES[it.kind], it.x * TILE, it.y * TILE);
+  }
+
+  const enemyPos = state.enemies.map((e) => drawWalker(SPRITES[e.kind], e, now, e.type.ai === 'boss' ? 2 : 1));
+  // 연차 중에는 깜빡인다
+  if (state.annualTurns > 0 && Math.floor(now / 120) % 2) ctx.globalAlpha = 0.4;
+  drawWalker(SPRITES.hero, h, now);
+  ctx.globalAlpha = 1;
+
+  // 체력 막대 · "!" 는 캐릭터 위에 덮어 그린다 (주인공에 가려지지 않게)
+  state.enemies.forEach((e, i) => {
+    const p = enemyPos[i];
+    if (e.type.ai === 'boss') {
+      // 체력은 화면 위 큰 막대. 다음 턴에 행동할 차례면 머리 위 빨간 "!" (예고)
+      // 2배 그림의 오른쪽 위 빈 곳 (머리 위에 두면 맨 윗줄에서 화면 밖으로 나간다)
+      if (e.started && BOSS.actEvery > 1 && e.busy === BOSS.actEvery - 1) {
+        const bx = Math.round(p.x) + 19;
+        const by = Math.round(p.y) - 15;
+        ctx.fillStyle = PALETTE.o;
+        ctx.fillRect(bx - 1, by - 1, 5, 9);
+        ctx.fillStyle = '#ff5a5a';
+        ctx.fillRect(bx, by, 3, 5);
+        ctx.fillRect(bx, by + 6, 3, 1);
+      }
+      return;
+    }
+    // 다친 적만 체력 막대
+    if (e.hp < e.type.hp) {
+      const bx = Math.round(p.x) + 2;
+      const by = Math.round(p.y) - 2;
+      ctx.fillStyle = '#2b2230';
+      ctx.fillRect(bx, by, 12, 2);
+      ctx.fillStyle = '#ff7a7a';
+      ctx.fillRect(bx, by, Math.max(1, Math.round((12 * e.hp) / e.type.hp)), 2);
+    }
+    const px = Math.round(p.x);
+    const py = Math.round(p.y);
+    // 머리 위 표시: 상사는 평소 음표(노래 듣는 중), 방금 부른 직후엔 "!"
+    const calling = e.type.ai === 'wander' && e.cooldown > e.type.callCooldown - 3;
+    if (e.type.ai === 'wander' && !calling) {
+      const bob = Math.floor(now / 300) % 2;
+      drawPixelText('♪', px + 10, py - 5 - bob, '#bcdcf2');
+    } else if ((e.awake || calling) && e.hp === e.type.hp) {
+      ctx.fillStyle = '#ffe27a';
+      ctx.fillRect(px + 7, py - 5, 2, 3);
+      ctx.fillRect(px + 7, py - 1, 2, 1);
+    }
+    // 상사가 떠넘긴 일로 강해진 적
+    if (e.bonus > 0) drawPixelText('+', px, py - 4, '#ff7a7a');
+  });
+
+  // 고객사가 던진 서류: 던진 자리에서 주인공까지 날아간다
+  state.shots = state.shots.filter((s) => now - s.start < SHOT_MS);
+  for (const s of state.shots) {
+    const k = (now - s.start) / SHOT_MS;
+    const sx = Math.round((s.fromX + (s.toX - s.fromX) * k) * TILE) + 6;
+    const sy = Math.round((s.fromY + (s.toY - s.fromY) * k) * TILE) + 6;
+    ctx.fillStyle = PALETTE.o;
+    ctx.fillRect(sx - 1, sy - 1, 6, 5);
+    ctx.fillStyle = PALETTE.P;
+    ctx.fillRect(sx, sy, 4, 3);
+    ctx.fillStyle = PALETTE.L;
+    ctx.fillRect(sx + 1, sy + 1, 2, 1);
+  }
+
+  // 피해 숫자: 맞은 캐릭터 몸 위에서 떠오른다
+  state.popups = state.popups.filter((pp) => now - pp.start < POPUP_MS);
+  for (const pp of state.popups) {
+    const k = Math.max(0, (now - pp.start) / POPUP_MS);
+    const w = pp.text.length * 4 - 1;
+    const px = pp.x * TILE + Math.round((TILE - w) / 2);
+    const py = pp.y * TILE + 5 - Math.round(k * 6);
+    drawPixelText(pp.text, px, py, pp.color);
+  }
+
+  requestAnimationFrame(draw);
+}
+
+// ─────────────────────────────────────────────
+// 9. 입력 — 키보드 + 터치 패드
+// ─────────────────────────────────────────────
+const KEYS = {
+  ArrowUp: 'up', KeyW: 'up',
+  ArrowDown: 'down', KeyS: 'down',
+  ArrowLeft: 'left', KeyA: 'left',
+  ArrowRight: 'right', KeyD: 'right',
+  Space: 'wait',
+};
+
+const ITEM_KEYS = {
+  Digit1: 'coffee', Numpad1: 'coffee',
+  Digit2: 'annual', Numpad2: 'annual',
+  Digit3: 'half', Numpad3: 'half',
+};
+
+window.addEventListener('keydown', (e) => {
+  if (state.over && (e.code === 'Enter' || e.code === 'Space')) {
+    e.preventDefault();
+    newRun();
+    return;
+  }
+  if (ITEM_KEYS[e.code]) {
+    e.preventDefault();
+    useItem(ITEM_KEYS[e.code]);
+    return;
+  }
+  const dir = KEYS[e.code];
+  if (!dir) return;
+  e.preventDefault();
+  act(dir);
+});
+
+document.querySelectorAll('#items button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    btn.blur(); // 포커스가 남으면 Space/Enter 로 또 눌린다
+    useItem(btn.dataset.item);
+  });
+});
+
+document.querySelectorAll('#pad button').forEach((btn) => {
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    act(btn.dataset.dir);
+  });
+});
+
+document.getElementById('restart').addEventListener('click', () => newRun());
+
+newRun(Number(params.get('seed')) || randomSeed());
+draw();
+</script>
+</body>
+</html>
