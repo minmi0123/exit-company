@@ -95,6 +95,28 @@
   #overlay.lose h2 { color: var(--danger); }
   #overlay p { margin: 0; color: var(--text); }
   #overlay #best { color: var(--muted); font-size: 14px; }
+  /* 점수표가 붙으면 좁은 폰 화면에 맞게 촘촘하게. 넘치면 위가 잘리지 않고 스크롤 */
+  #overlay { overflow-y: auto; justify-content: safe center; }
+  #overlay.scored { gap: 4px; padding: 8px 16px; }
+  #overlay.scored h2 { font-size: 20px; }
+  #overlay.scored #result { font-size: 13px; }
+  #overlay.scored button { margin-top: 2px; padding: 8px 18px; }
+  #score { display: none; flex-direction: column; align-items: center; gap: 4px; }
+  #score.show { display: flex; }
+  #score .total { font-size: 22px; color: var(--accent); line-height: 1.1; }
+  #score .total small { font-size: 14px; color: var(--muted); }
+  #score dl {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 0 14px;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  #score dt { color: var(--muted); text-align: left; }
+  #score dd { margin: 0; text-align: right; }
+  #score dd.minus { color: var(--danger); }
+  #score .new { color: #7fd6a8; font-size: 12px; }
   #overlay button {
     margin-top: 6px;
     padding: 10px 20px;
@@ -241,6 +263,7 @@
   <div id="overlay">
     <h2 id="overlayTitle"></h2>
     <p id="result"></p>
+    <div id="score"></div>
     <p id="best"></p>
     <button id="restart">다시 출근하기</button>
   </div>
@@ -1237,6 +1260,7 @@ function newRun(seed = randomSeed()) {
   state.bag = { coffee: 0, annual: 0, half: 0 };
   state.annualTurns = 0;
   state.throwCd = 0;
+  state.stats = { kills: 0, items: 0 };
   state.halfTurns = 0;
   state.over = false;
   document.getElementById('overlay').className = '';
@@ -1459,6 +1483,7 @@ function pickUp() {
   if (!item) return;
   state.items = state.items.filter((it) => it !== item);
   state.bag[item.kind] += 1;
+  state.stats.items += 1;
   const type = ITEM_TYPES[item.kind];
   say(type.name + '를 주웠다. (' + type.key + '번으로 사용)');
 }
@@ -1515,6 +1540,7 @@ function heroAttack(e, dmg = HERO.attack, weapon = '키보드') {
 
 function removeEnemy(e) {
   state.enemies = state.enemies.filter((o) => o !== e);
+  state.stats.kills += 1;
   if (state.grab && state.grab.by === e) state.grab = null;
   if (e.type.ai === 'boss') {
     say('사장님을 먼저 퇴근시켰다!');
@@ -1732,6 +1758,62 @@ function hurtHero(e, dmg, line) {
 //    기록: 0 = 퇴근 성공, 1~5 = 도달한 가장 낮은 층
 // ─────────────────────────────────────────────
 const BEST_KEY = 'exit-company.best';
+const BEST_SCORE_KEY = 'exit-company.bestScore';
+
+// 최종 점수 (퇴근 성공했을 때만). 빨리·많이·덜 야근할수록 높다
+const SCORE = {
+  clear: 1000,        // 퇴근 성공
+  perKill: 30,        // 퇴근시킨 적 (사장님이 불러온 동기 포함)
+  perItem: 20,        // 주운 아이템
+  perMental: 10,      // 남은 멘탈
+  perTurn: -1,        // 걸린 턴
+  perOvertime: -5,    // 야근 1분당 (30분 밀리면 -150)
+};
+
+function scoreLines() {
+  const o = state.overtime;
+  const lateText = o === 0 ? '없음' : (o >= 60 ? Math.floor(o / 60) + '시간' : '') + (o % 60 ? (o % 60) + '분' : '');
+  return [
+    ['퇴근 성공', SCORE.clear],
+    ['퇴근시킨 적 ' + state.stats.kills + '명', state.stats.kills * SCORE.perKill],
+    ['모은 아이템 ' + state.stats.items + '개', state.stats.items * SCORE.perItem],
+    ['남은 멘탈 ' + state.mental, state.mental * SCORE.perMental],
+    ['걸린 턴 ' + state.turn, state.turn * SCORE.perTurn],
+    ['야근 ' + lateText, o * SCORE.perOvertime],
+  ];
+}
+
+// 이번 점수를 저장하고, 이전 최고 점수를 돌려준다
+function saveBestScore(score) {
+  let prev = null;
+  try {
+    const v = localStorage.getItem(BEST_SCORE_KEY);
+    prev = v === null ? null : Number(v);
+    if (prev === null || score > prev) localStorage.setItem(BEST_SCORE_KEY, String(score));
+  } catch (e) {
+    // 저장이 막힌 환경에서는 비교만 못 한다
+  }
+  return prev;
+}
+
+function showScore(cleared) {
+  const box = document.getElementById('score');
+  if (!cleared) {
+    box.className = '';
+    box.innerHTML = '';
+    return;
+  }
+  const lines = scoreLines();
+  const total = Math.max(0, lines.reduce((sum, [, v]) => sum + v, 0));
+  const prev = saveBestScore(total);
+  const sign = (v) => (v > 0 ? '+' + v : v < 0 ? '−' + -v : '0');
+  box.innerHTML = '<div class="total">' + total + ' <small>점</small></div>'
+    + '<dl>' + lines.map(([k, v]) => '<dt>' + k + '</dt><dd' + (v < 0 ? ' class="minus"' : '') + '>' + sign(v) + '</dd>').join('') + '</dl>'
+    + (prev === null || total > prev
+      ? '<div class="new">최고 점수!</div>'
+      : '<div class="new" style="color: var(--muted)">최고 점수 ' + prev + '</div>');
+  box.className = 'show';
+}
 
 function loadBest() {
   try {
@@ -1760,16 +1842,18 @@ function finish(cleared) {
   const overlay = document.getElementById('overlay');
   document.getElementById('overlayTitle').textContent = cleared ? '퇴근 성공!' : '멘탈 붕괴…';
   const late = state.overtime > 0
-    ? ' (야근 ' + (state.overtime >= 60 ? Math.floor(state.overtime / 60) + '시간 ' : '')
-      + (state.overtime % 60 ? (state.overtime % 60) + '분' : '') + ')'
+    ? ' (야근 ' + ((state.overtime >= 60 ? Math.floor(state.overtime / 60) + '시간 ' : '')
+      + (state.overtime % 60 ? (state.overtime % 60) + '분' : '')).trim() + ')'
     : ' (정시 퇴근!)';
   document.getElementById('result').textContent = cleared
-    ? '퇴근 시각 ' + clockText() + late + ' · 총 ' + state.turn + '턴'
+    ? '퇴근 시각 ' + clockText() + late
     : state.floor + 'F 에서 쓰러졌다. (' + state.turn + '턴)';
-  document.getElementById('best').textContent = '최고 기록: '
+  showScore(cleared);
+  // 퇴근 성공이면 점수 쪽에 최고 점수가 나오므로 층 기록은 실패했을 때만
+  document.getElementById('best').textContent = cleared ? '' : '최고 기록: '
     + (best === 0 ? '퇴근 성공' : best + 'F 까지');
   setTimeout(() => {
-    overlay.className = cleared ? 'show' : 'show lose';
+    overlay.className = cleared ? 'show scored' : 'show lose';
   }, 250);
 }
 
