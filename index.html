@@ -282,6 +282,7 @@ const PALETTE = {
   A: '#e4e4e8', // 복사기 · 정수기 몸통
   B: '#a9adb8', // 복사기 · 정수기 그림자
   C: '#6fb3e0', // 정수기 물통
+  G: '#4a5160', // 다 마신 정수기 물통
   // 적 소품 (대문자 = 색을 바꾸지 않는 소품 전용)
   P: '#fbfbf7', // 종이 · 맥주 거품
   L: '#9aa3b5', // 종이 줄
@@ -745,6 +746,7 @@ const SPRITES = {
   plant: makeSprite(onFloor(PLANT)),
   copier: makeSprite(onFloor(COPIER)),
   cooler: makeSprite(onFloor(COOLER)),
+  coolerEmpty: makeSprite(onFloor(COOLER), { colors: { C: PALETTE.G, x: PALETTE.G } }),
   shelf: makeSprite(onFloor(SHELF)),
   stairs: makeSprite(STAIRS),
   exit: makeSprite(EXIT),
@@ -768,6 +770,7 @@ const SPRITES = {
 const HERO = {
   maxMental: 20,
   attack: 3,          // 키보드
+  coolerHeal: 3,      // 정수기 한 번 (층마다 새 맵이라 다시 채워진다)
 };
 
 // ai: melee(쫓아와서 때림) · ranged(한 줄로 보이면 던짐) · grab(붙잡기) · wander(돌아다니다 부름)
@@ -874,13 +877,13 @@ const ITEM_TYPES = {
 
 // ─────────────────────────────────────────────
 // 4. 층 자동 생성 — 방 여러 개 + 복도
-//    # 벽  . 바닥  D 책상  T 회의 테이블(2x2)  P 화분  C 복사기  W 정수기  S 책장
+//    # 벽  . 바닥  D 책상  T 회의 테이블(2x2)  P 화분  C 복사기  W 정수기  V 다 마신 정수기  S 책장
 //    > 계단  E 출구(1층)
 // ─────────────────────────────────────────────
 const MAP_W = 32;
 const MAP_H = 24;
 const TOP_FLOOR = 5;
-const BLOCKING = new Set(['#', 'D', 'T', 'P', 'C', 'W', 'S']);
+const BLOCKING = new Set(['#', 'D', 'T', 'P', 'C', 'W', 'V', 'S']);
 const STEPS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 // 시드가 같으면 같은 맵이 나온다 (버그 재현용)
@@ -1264,6 +1267,16 @@ function act(dir) {
       say('팀장님한테 손을 댈 순 없다… (연차·반차로 탈출)');
     } else if (target) {
       heroAttack(target);
+    } else if (tileAt(nx, ny) === 'W') {
+      // 정수기: 부딪히면 한 번 마신다 (턴을 쓴다). 멘탈이 꽉 차 있으면 아껴 둔다
+      if (state.mental >= HERO.maxMental) {
+        state.shake = 6;
+        say('정수기다. 지금은 목이 안 마르다.');
+        return;
+      }
+      state.map.grid[ny][nx] = 'V';
+      state.mental = Math.min(HERO.maxMental, state.mental + HERO.coolerHeal);
+      say('정수기 물을 마셨다. 멘탈 +' + HERO.coolerHeal);
     } else if (BLOCKING.has(tileAt(nx, ny))) {
       state.shake = 6; // 막힘: 턴을 소모하지 않는다
       return;
@@ -1707,6 +1720,7 @@ function spriteFor(x, y) {
   if (t === 'P') return SPRITES.plant;
   if (t === 'C') return SPRITES.copier;
   if (t === 'W') return SPRITES.cooler;
+  if (t === 'V') return SPRITES.coolerEmpty;
   if (t === 'S') return SPRITES.shelf;
   if (t === '>') return SPRITES.stairs;
   if (t === 'E') return SPRITES.exit;
