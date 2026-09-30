@@ -14,7 +14,8 @@
     --danger: #ff7a7a;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
+  html { height: 100%; }
+  body { margin: 0; min-height: 100%; }
   body {
     background: var(--bg);
     color: var(--text);
@@ -131,7 +132,10 @@
   #items .key { color: var(--muted); font-size: 12px; }
   #status b { color: #7fd6a8; font-weight: normal; }
   #status b.bad { color: var(--danger); }
+  /* 방향키는 화면 맨 아래로 — 엄지가 닿는 자리 */
   #pad {
+    margin-top: auto;
+    padding-bottom: env(safe-area-inset-bottom);
     display: grid;
     grid-template-columns: repeat(3, 64px);
     grid-template-rows: repeat(3, 64px);
@@ -148,10 +152,42 @@
   #pad button:active { background: #4a4458; }
   #pad .up    { grid-column: 2; grid-row: 1; }
   #pad .left  { grid-column: 1; grid-row: 2; }
-  #pad .wait  { grid-column: 2; grid-row: 2; font-size: 14px; }
   #pad .right { grid-column: 3; grid-row: 2; }
   #pad .down  { grid-column: 2; grid-row: 3; }
-  #help { color: var(--muted); font-size: 12px; margin: 0; text-align: center; }
+  /* 처음 켰을 때 조작법 팝업 */
+  #intro {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(20, 18, 26, 0.85);
+  }
+  #intro.show { display: flex; }
+  #intro .box {
+    width: 100%;
+    max-width: 360px;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #intro h2 { margin: 0; font-size: 20px; color: var(--accent); }
+  #intro ul { margin: 0; padding-left: 18px; line-height: 1.7; font-size: 14px; }
+  #intro #seed { color: var(--muted); font-size: 12px; margin: 0; }
+  #intro button {
+    padding: 10px 20px;
+    font-size: 16px;
+    font-family: inherit;
+    background: var(--accent);
+    color: #1d1a22;
+    border: 0;
+    border-radius: 8px;
+  }
   /* 키보드가 있는 환경에서는 패드를 숨긴다 */
   @media (hover: hover) and (pointer: fine) {
     #pad { display: none; }
@@ -188,11 +224,23 @@
 <div id="pad">
   <button class="up" data-dir="up">▲</button>
   <button class="left" data-dir="left">◀</button>
-  <button class="wait" data-dir="wait">대기</button>
   <button class="right" data-dir="right">▶</button>
   <button class="down" data-dir="down">▼</button>
 </div>
-<p id="help">방향키 / WASD 로 이동 · 적 쪽으로 이동하면 키보드 공격 · Space 로 대기 · 1/2/3 으로 아이템 · <span id="seed"></span></p>
+
+<div id="intro" class="show">
+  <div class="box">
+    <h2>조작법</h2>
+    <ul>
+      <li>방향키 / WASD (폰은 아래 방향 패드) 로 이동</li>
+      <li>적 쪽으로 이동하면 키보드 공격</li>
+      <li>Space 로 제자리 대기 (PC)</li>
+      <li>1 / 2 / 3 으로 아이템 (커피 · 연차 · 반차)</li>
+    </ul>
+    <p id="seed"></p>
+    <button id="start">출근하기</button>
+  </div>
+</div>
 
 <script>
 // ─────────────────────────────────────────────
@@ -674,11 +722,11 @@ ENEMY_TYPES.boss = BOSS;
 
 // 층별 적 구성 (5F → 1F). 한 층에 한 종씩 새로 등장
 const ENEMIES_PER_FLOOR = {
-  5: { donggi: 2 },
-  4: { donggi: 2, client: 1 },
-  3: { donggi: 2, client: 1, leader: 1 },
-  2: { donggi: 2, client: 1, leader: 1, sangsa: 1 },
-  1: { donggi: 1, client: 1 },  // 보스 층은 가볍게 (사장님이 동기를 불러오므로)
+  5: { donggi: 3 },
+  4: { donggi: 3, client: 2 },
+  3: { donggi: 3, client: 2, leader: 1 },
+  2: { donggi: 3, client: 2, leader: 2, sangsa: 1 },
+  1: { donggi: 2, client: 1 },  // 보스 층은 가볍게 (사장님이 동기를 불러오므로)
 };
 
 // 상사가 쓰러지면 남은 적 공격력이 이만큼 오른다
@@ -686,9 +734,9 @@ const SANGSA_DEATH_BUFF = 1;
 
 // 아이템. 층마다 min~max 개, chance 는 그 층에 나올 확률
 const ITEM_TYPES = {
-  coffee: { name: '커피', key: 1, min: 1, max: 1, chance: 0.8, heal: 5 },
-  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.2, turns: 5 },  // 무적. 강해서 드물게
-  half:   { name: '반차', key: 3, min: 1, max: 1, chance: 0.35, turns: 3 }, // 한 턴에 두 번 행동
+  coffee: { name: '커피', key: 1, min: 1, max: 2, chance: 1, heal: 5 },
+  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.35, turns: 5 }, // 무적. 강해서 드물게
+  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.6, turns: 3 },  // 한 턴에 두 번 행동
 };
 
 // ─────────────────────────────────────────────
@@ -1659,7 +1707,19 @@ const ITEM_KEYS = {
   Digit3: 'half', Numpad3: 'half',
 };
 
+const intro = document.getElementById('intro');
+function closeIntro() { intro.classList.remove('show'); }
+document.getElementById('start').addEventListener('click', closeIntro);
+
 window.addEventListener('keydown', (e) => {
+  // 조작법 팝업이 떠 있으면 Enter/Space 로 닫기만 한다
+  if (intro.classList.contains('show')) {
+    if (e.code === 'Enter' || e.code === 'Space') {
+      e.preventDefault();
+      closeIntro();
+    }
+    return;
+  }
   if (state.over && (e.code === 'Enter' || e.code === 'Space')) {
     e.preventDefault();
     newRun();
