@@ -95,6 +95,42 @@
   #overlay.lose h2 { color: var(--danger); }
   #overlay p { margin: 0; color: var(--text); }
   #overlay #best { color: var(--muted); font-size: 14px; }
+  /* 계단에서 고르는 강화 카드 */
+  #perk {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;
+    gap: 10px;
+    padding: 8px 12px;
+    overflow-y: auto;
+    background: rgba(20, 18, 26, 0.88);
+    text-align: center;
+  }
+  #perk.show { display: flex; }
+  #perk h2 { margin: 0; font-size: 20px; color: var(--accent); }
+  #perk p { margin: 0; font-size: 12px; color: var(--muted); }
+  #perk .cards { display: flex; gap: 8px; width: 100%; max-width: 440px; }
+  #perk .cards button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 8px;
+    background: var(--panel);
+    color: var(--text);
+    border: 2px solid #4a4458;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  #perk .cards button:active { border-color: var(--accent); }
+  #perk .cards b { font-size: 15px; color: var(--accent); font-weight: normal; }
+  #perk .cards .key { color: var(--muted); font-size: 11px; }
+  #perks { color: var(--muted); font-size: 12px; margin: 0; }
   /* 점수표가 붙으면 좁은 폰 화면에 맞게 촘촘하게. 넘치면 위가 잘리지 않고 스크롤 */
   #overlay { overflow-y: auto; justify-content: safe center; }
   #overlay.scored { gap: 4px; padding: 8px 16px; }
@@ -260,10 +296,16 @@
     <span>야근 강요하는 사장님<span id="bossbonus"></span></span>
     <div class="track"><div id="bossfill"></div></div>
   </div>
+  <div id="perk">
+    <h2>계단에서 한숨 돌렸다</h2>
+    <p>하나를 골라 능력을 올리자</p>
+    <div class="cards"></div>
+  </div>
   <div id="overlay">
     <h2 id="overlayTitle"></h2>
     <p id="result"></p>
     <div id="score"></div>
+    <p id="perks"></p>
     <p id="best"></p>
     <button id="restart">다시 출근하기</button>
   </div>
@@ -292,6 +334,7 @@
       <li>적 쪽으로 이동하면 키보드 공격</li>
       <li>Space (폰은 가운데 버튼) 로 볼펜 던지기 — 7칸 안 가장 가까운 적(노란 꺾쇠)을 자동 조준, 3턴에 한 번</li>
       <li>1 / 2 / 3 으로 아이템 (커피 · 연차 · 반차)</li>
+      <li>계단을 내려갈 때마다 강화 두 장 중 하나를 고른다</li>
     </ul>
     <p id="seed"></p>
     <button id="start">출근하기</button>
@@ -831,7 +874,42 @@ const HERO = {
   throwDamage: 2,     // 볼펜 던지기 (원거리). 키보드보다 약하다
   throwRange: 7,      // 가장 가까운 적을 자동으로 조준. 벽·가구·다른 적에 가리면 못 던진다
   throwCooldown: 3,   // n턴에 한 번. 없으면 멀리서 계속 던져 동기가 닿기도 전에 쓰러진다
+  // 아래는 강화로만 오른다
+  healBonus: 0,       // 커피·정수기 회복량 추가
+  guard: 0,           // 받는 피해 감소 (최소 1은 받는다)
+  dashChance: 0,      // 이동할 때 두 칸 갈 확률
+  floorItems: 0,      // 층 시작할 때 받는 아이템 수
+  grabResist: 0,      // 팀장님 붙잡기 턴 감소 (최소 1턴)
+  overtimeImmune: false, // 사장님이 퇴근 시간을 밀어도 공격력이 안 오름
 };
+
+// 계단을 내려갈 때마다 두 장 중 하나를 고른다 (5F→1F 동안 4번). 같은 강화를 또 받을 수 있다
+// available: 더 받아 봐야 소용없으면 후보에서 뺀다
+const PERKS = [
+  { id: 'keyboard', name: '기계식 키보드', desc: '키보드 공격 +1',
+    apply: (s) => { s.attack += 1; } },
+  { id: 'pens', name: '볼펜 한 다스', desc: '던지기 대기 1턴 줄임',
+    apply: (s) => { s.throwCooldown -= 1; }, available: (s) => s.throwCooldown > 1 },
+  { id: 'fountain', name: '만년필', desc: '던지기 피해 +1',
+    apply: (s) => { s.throwDamage += 1; } },
+  { id: 'mental', name: '멘탈 관리', desc: '최대 멘탈 +5, 바로 5 회복',
+    apply: (s) => { s.maxMental += 5; state.mental += 5; } },
+  { id: 'tumbler', name: '텀블러', desc: '커피·정수기 회복 +2',
+    apply: (s) => { s.healBonus += 2; } },
+  { id: 'headphone', name: '노이즈캔슬링', desc: '받는 피해 -1 (최소 1)',
+    apply: (s) => { s.guard += 1; }, available: (s) => s.guard < 2 },
+  { id: 'dash', name: '칼퇴 본능', desc: '이동할 때 25% 확률로 두 칸',
+    apply: (s) => { s.dashChance += 0.25; }, available: (s) => s.dashChance < 0.75 },
+  { id: 'network', name: '사내 인맥', desc: '층 시작마다 무작위 아이템 1개',
+    apply: (s) => { s.floorItems += 1; } },
+  { id: 'refuse', name: '거절의 기술', desc: '팀장님 회식 붙잡기 1턴 줄임',
+    apply: (s) => { s.grabResist += 1; }, available: (s) => s.grabResist < 2 },
+  { id: 'overtime', name: '야근 면역', desc: '퇴근 시간이 밀려도 사장님 공격력이 안 오름',
+    apply: (s) => { s.overtimeImmune = true; }, available: (s) => !s.overtimeImmune },
+];
+
+// 아래층일수록 적 체력이 조금씩 오른다 (강화를 받는 만큼). 사장님은 BOSS.hp 에서 따로 정한다
+const HP_PER_FLOOR = 0.1; // 한 층 내려갈 때마다 +10%
 
 // ai: melee(쫓아와서 때림) · ranged(한 줄로 보이면 던짐) · grab(붙잡기) · wander(돌아다니다 부름)
 // short/obj: 문장에 넣을 이름 (받침에 따라 을/를)
@@ -898,7 +976,7 @@ const BOSS = {
   name: '야근 강요하는 사장님',
   short: '사장님', obj: '사장님을',
   ai: 'boss',
-  hp: 27,             // 키보드 9방 (볼펜·아이템이 늘어서 18 → 27, 2026-09-30)
+  hp: 30,             // 볼펜·아이템이 늘어서 18 → 27, 강화가 생겨서 → 30 (2026-09-30)
   attack: 5,          // 대신 2턴에 한 번만 때린다 (분노하면 매 턴)
   sight: 6,
   summonEvery: 5,     // n턴마다 동기를 옆에 불러온다 ("긴급 회의")
@@ -1176,8 +1254,10 @@ function spawnEnemies(map, floorNo, rng) {
 
 function makeEnemy(kind, x, y) {
   const type = ENEMY_TYPES[kind];
+  const scale = kind === 'boss' ? 1 : 1 + HP_PER_FLOOR * (TOP_FLOOR - (state.floor || TOP_FLOOR));
+  const hp = Math.round(type.hp * scale);
   return {
-    kind, type, x, y, hp: type.hp, facing: -1, step: 0,
+    kind, type, x, y, hp, maxHp: hp, facing: -1, step: 0,
     awake: false,     // 주인공을 알아챘는지
     bonus: 0,         // 상사가 떠넘긴 공격력 / 사장님 야근 누적
     cooldown: 0,      // 팀장님 붙잡기 / 상사 부르기 / 고객사 재장전 / 사장님 소집
@@ -1212,6 +1292,9 @@ const state = {
   turn: 0,
   floor: TOP_FLOOR,
   mental: HERO.maxMental,
+  stat: { ...HERO },  // 이번 판 능력치 (강화로 바뀐다)
+  perks: [],          // 받은 강화 이름
+  choosing: false,    // 계단에서 강화를 고르는 중
   map: null,
   enemies: [],
   items: [],          // 바닥에 떨어진 아이템
@@ -1250,12 +1333,67 @@ function enterFloor(floorNo) {
   updateHud();
 }
 
+// 계단: 강화 두 장을 보여 주고, 고르면 다음 층으로
+function offerPerks() {
+  state.choosing = true;
+  const pool = PERKS.filter((p) => !p.available || p.available(state.stat));
+  const picks = [];
+  while (picks.length < 2 && pool.length) {
+    picks.push(pool.splice(Math.floor(state.rng() * pool.length), 1)[0]);
+  }
+  const cards = document.querySelector('#perk .cards');
+  cards.innerHTML = '';
+  picks.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.innerHTML = '<span class="key">' + (i + 1) + '</span><b>' + p.name + '</b><span>' + p.desc + '</span>';
+    btn.addEventListener('click', () => choosePerk(p));
+    cards.appendChild(btn);
+  });
+  state.perkChoices = picks;
+  document.getElementById('perk').className = 'show';
+  updateHud();
+}
+
+function choosePerk(p) {
+  if (!state.choosing) return;
+  state.choosing = false;
+  document.getElementById('perk').className = '';
+  p.apply(state.stat);
+  state.mental = Math.min(state.stat.maxMental, state.mental);
+  state.perks.push(p.name);
+  enterFloor(state.floor - 1);
+  say('강화: ' + p.name + ' — ' + p.desc);
+  giveFloorItems();
+  updateHud();
+}
+
+// 사내 인맥: 층 시작마다 무작위 아이템
+function giveFloorItems() {
+  const kinds = Object.keys(ITEM_TYPES);
+  for (let i = 0; i < state.stat.floorItems; i++) {
+    const kind = kinds[Math.floor(state.rng() * kinds.length)];
+    state.bag[kind] += 1;
+    say('사내 인맥으로 ' + ITEM_TYPES[kind].name + '를 챙겼다.');
+  }
+}
+
+// 받은 강화 목록: "기계식 키보드 ×2 · 텀블러"
+function perksText() {
+  const counts = new Map();
+  for (const name of state.perks) counts.set(name, (counts.get(name) || 0) + 1);
+  return [...counts].map(([name, n]) => (n > 1 ? name + ' ×' + n : name)).join(' · ');
+}
+
 // 판마다 새 시드 = 새 맵. 같은 판을 다시 보려면 주소에 ?seed=번호
 function newRun(seed = randomSeed()) {
   state.seed = seed;
   state.rng = mulberry32(seed ^ 0x5eed);
   document.getElementById('seed').textContent = '시드 ' + seed;
   state.turn = 0;
+  state.stat = { ...HERO };
+  state.perks = [];
+  state.choosing = false;
+  document.getElementById('perk').className = '';
   state.mental = HERO.maxMental;
   state.bag = { coffee: 0, annual: 0, half: 0 };
   state.annualTurns = 0;
@@ -1321,7 +1459,7 @@ function moveUnit(u, nx, ny) {
 }
 
 function act(dir) {
-  if (state.over) return;
+  if (state.over || state.choosing) return;
   beginAction();
   const [dx, dy] = DIRS[dir];
   const h = state.hero;
@@ -1339,14 +1477,15 @@ function act(dir) {
       heroAttack(target);
     } else if (tileAt(nx, ny) === 'W') {
       // 정수기: 부딪히면 한 번 마신다 (턴을 쓴다). 멘탈이 꽉 차 있으면 아껴 둔다
-      if (state.mental >= HERO.maxMental) {
+      if (state.mental >= state.stat.maxMental) {
         state.shake = 6;
         say('정수기다. 지금은 목이 안 마르다.');
         return;
       }
       state.map.grid[ny][nx] = 'V';
-      state.mental = Math.min(HERO.maxMental, state.mental + HERO.coolerHeal);
-      say('정수기 물을 마셨다. 멘탈 +' + HERO.coolerHeal);
+      const heal = state.stat.coolerHeal + state.stat.healBonus;
+      state.mental = Math.min(state.stat.maxMental, state.mental + heal);
+      say('정수기 물을 마셨다. 멘탈 +' + heal);
     } else if (BLOCKING.has(tileAt(nx, ny))) {
       state.shake = 6; // 막힘: 턴을 소모하지 않는다
       return;
@@ -1361,7 +1500,7 @@ function act(dir) {
     } else {
       moveUnit(h, nx, ny);
       pickUp();
-      if (state.halfTurns > 0) dashStep(dx, dy);
+      if (state.halfTurns > 0 || state.rng() < state.stat.dashChance) dashStep(dx, dy);
     }
   }
 
@@ -1377,7 +1516,7 @@ function throwTarget() {
   for (const e of state.enemies) {
     if (state.grab && state.grab.by === e) continue;
     const d = Math.hypot(e.x - h.x, e.y - h.y);
-    if (d > HERO.throwRange + 0.5 || d >= bestD || !clearShot(h, e)) continue;
+    if (d > state.stat.throwRange + 0.5 || d >= bestD || !clearShot(h, e)) continue;
     best = e;
     bestD = d;
   }
@@ -1399,7 +1538,7 @@ function clearShot(a, b) {
 // 볼펜 던지기: 가장 가까운 적에게 자동으로 날아간다.
 // 맞힐 적이 없거나 대기 중이면 턴을 쓰지 않는다
 function throwPen() {
-  if (state.over) return;
+  if (state.over || state.choosing) return;
   beginAction();
   if (state.throwCd > 0) {
     say('볼펜을 다시 집는 중… (' + state.throwCd + '턴)');
@@ -1410,13 +1549,13 @@ function throwPen() {
   if (!target) {
     say(state.grab
       ? '팀장님 말고는 맞힐 사람이 없다… (연차·반차로 탈출)'
-      : HERO.throwRange + '칸 안에 보이는 적이 없다.');
+      : state.stat.throwRange + '칸 안에 보이는 적이 없다.');
     return;
   }
   if (target.x !== h.x) h.facing = target.x > h.x ? 1 : -1;
   state.shots.push({ fromX: h.x, fromY: h.y, toX: target.x, toY: target.y, start: performance.now(), pen: true });
-  state.throwCd = HERO.throwCooldown;
-  heroAttack(target, HERO.throwDamage, '볼펜');
+  state.throwCd = state.stat.throwCooldown;
+  heroAttack(target, state.stat.throwDamage, '볼펜');
   endHeroAction();
 }
 
@@ -1443,7 +1582,7 @@ function endHeroAction() {
   const h = state.hero;
   const here = tileAt(h.x, h.y);
   if (here === '>') {
-    enterFloor(state.floor - 1);
+    offerPerks();
     return;
   }
   if (here === 'E') {
@@ -1470,7 +1609,9 @@ function overtimeTick() {
   if (boss.awakeTurns % BOSS.overtimeEvery !== 0) return;
   state.overtime += 30;
   let note = '';
-  if (boss.bonus < BOSS.overtimeMaxBonus) {
+  if (state.stat.overtimeImmune) {
+    note = ' (야근 면역: 사장님 공격력 그대로)';
+  } else if (boss.bonus < BOSS.overtimeMaxBonus) {
     boss.bonus += 1;
     note = ' 사장님 공격력 +1';
   }
@@ -1489,7 +1630,7 @@ function pickUp() {
 }
 
 function useItem(kind) {
-  if (state.over) return;
+  if (state.over || state.choosing) return;
   beginAction();
   if (state.bag[kind] <= 0) {
     say(ITEM_TYPES[kind].name + '가 없다.');
@@ -1500,7 +1641,7 @@ function useItem(kind) {
   const type = ITEM_TYPES[kind];
   if (kind === 'coffee') {
     const before = state.mental;
-    state.mental = Math.min(HERO.maxMental, state.mental + type.heal);
+    state.mental = Math.min(state.stat.maxMental, state.mental + type.heal + state.stat.healBonus);
     popup(h.x, h.y, '+' + (state.mental - before), '#7fd6a8');
     say('커피를 마셨다. 정신이 든다.');
   } else if (kind === 'annual') {
@@ -1519,7 +1660,7 @@ function useItem(kind) {
   endHeroAction();
 }
 
-function heroAttack(e, dmg = HERO.attack, weapon = '키보드') {
+function heroAttack(e, dmg = state.stat.attack, weapon = '키보드') {
   e.hp -= dmg;
   popup(e.x, e.y, '-' + dmg, '#ffe27a');
   if (e.hp <= 0) {
@@ -1527,7 +1668,7 @@ function heroAttack(e, dmg = HERO.attack, weapon = '키보드') {
     return;
   }
   say(weapon + '로 ' + e.type.short + '에게 ' + dmg + ' 피해.');
-  if (e.type.ai === 'boss' && !e.enraged && e.hp <= e.type.hp * BOSS.enrageAt) {
+  if (e.type.ai === 'boss' && !e.enraged && e.hp <= e.maxHp * BOSS.enrageAt) {
     e.enraged = true;
     e.busy = 0;
     state.shake = 8;
@@ -1659,9 +1800,10 @@ function leaderTurn(e, adjacent) {
       say('연차 중이라 회식 제안을 정중히 거절했다.');
       return true;
     }
-    state.grab = { by: e, turns: t.grabTurns };
+    const turns = Math.max(1, t.grabTurns - state.stat.grabResist);
+    state.grab = { by: e, turns };
     state.shake = 6;
-    say('팀장님: "오늘 회식 알지?" 붙잡혔다! (연차·반차로 탈출 / ' + t.grabTurns + '턴 뒤 풀려남)');
+    say('팀장님: "오늘 회식 알지?" 붙잡혔다! (연차·반차로 탈출 / ' + turns + '턴 뒤 풀려남)');
     return true;
   }
   hurtHero(e, attackOf(e), '팀장님이 어깨를 툭 친다. "다음엔 꼭 와~"');
@@ -1742,6 +1884,7 @@ function hurtHero(e, dmg, line) {
     say('연차 중이라 ' + e.type.short + '의 연락을 받지 않았다.');
     return;
   }
+  dmg = Math.max(1, dmg - state.stat.guard);
   state.mental -= dmg;
   state.shake = 8;
   h.hitAt = performance.now(); // 맞은 순간: 주인공이 좌우로 흔들린다
@@ -1849,6 +1992,7 @@ function finish(cleared) {
     ? '퇴근 시각 ' + clockText() + late
     : state.floor + 'F 에서 쓰러졌다. (' + state.turn + '턴)';
   showScore(cleared);
+  document.getElementById('perks').textContent = state.perks.length ? '받은 강화: ' + perksText() : '';
   // 퇴근 성공이면 점수 쪽에 최고 점수가 나오므로 층 기록은 실패했을 때만
   document.getElementById('best').textContent = cleared ? '' : '최고 기록: '
     + (best === 0 ? '퇴근 성공' : best + 'F 까지');
@@ -1878,7 +2022,7 @@ function updateHud() {
   throwBtn.disabled = state.throwCd > 0;
   document.getElementById('floor').textContent = state.floor + 'F';
   const m = document.getElementById('mental');
-  m.textContent = state.mental + '/' + HERO.maxMental;
+  m.textContent = state.mental + '/' + state.stat.maxMental;
   const low = state.mental <= HERO.lowMental && !state.over;
   m.className = state.mental <= HERO.lowMental ? 'low' : '';
   document.getElementById('stage').classList.toggle('danger', low);
@@ -1906,7 +2050,7 @@ function updateHud() {
   const bar = document.getElementById('bossbar');
   bar.className = boss && boss.awake && !state.over ? 'show' : '';
   if (boss) {
-    document.getElementById('bossfill').style.width = (100 * boss.hp / boss.type.hp) + '%';
+    document.getElementById('bossfill').style.width = (100 * boss.hp / boss.maxHp) + '%';
     document.getElementById('bossfill').style.background = boss.enraged ? 'var(--danger)' : '';
     document.getElementById('bossbonus').textContent = boss.bonus > 0 ? ' 공격력 +' + boss.bonus : '';
   }
@@ -2100,13 +2244,13 @@ function draw() {
       return;
     }
     // 다친 적만 체력 막대
-    if (e.hp < e.type.hp) {
+    if (e.hp < e.maxHp) {
       const bx = Math.round(p.x) + 2;
       const by = Math.round(p.y) - 2;
       ctx.fillStyle = '#2b2230';
       ctx.fillRect(bx, by, 12, 2);
       ctx.fillStyle = '#ff7a7a';
-      ctx.fillRect(bx, by, Math.max(1, Math.round((12 * e.hp) / e.type.hp)), 2);
+      ctx.fillRect(bx, by, Math.max(1, Math.round((12 * e.hp) / e.maxHp)), 2);
     }
     const px = Math.round(p.x);
     const py = Math.round(p.y);
@@ -2115,7 +2259,7 @@ function draw() {
     if (e.type.ai === 'wander' && !calling) {
       const bob = Math.floor(now / 300) % 2;
       drawPixelText('♪', px + 10, py - 5 - bob, '#bcdcf2');
-    } else if ((e.awake || calling) && e.hp === e.type.hp) {
+    } else if ((e.awake || calling) && e.hp === e.maxHp) {
       ctx.fillStyle = '#ffe27a';
       ctx.fillRect(px + 7, py - 5, 2, 3);
       ctx.fillRect(px + 7, py - 1, 2, 1);
@@ -2185,6 +2329,15 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'Enter' || e.code === 'Space') {
       e.preventDefault();
       closeIntro();
+    }
+    return;
+  }
+  // 강화 고르는 중: 1 / 2 (또는 ← →) 로 고른다
+  if (state.choosing) {
+    const i = { Digit1: 0, Numpad1: 0, ArrowLeft: 0, KeyA: 0, Digit2: 1, Numpad2: 1, ArrowRight: 1, KeyD: 1 }[e.code];
+    if (i !== undefined && state.perkChoices[i]) {
+      e.preventDefault();
+      choosePerk(state.perkChoices[i]);
     }
     return;
   }
