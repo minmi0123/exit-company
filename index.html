@@ -768,7 +768,6 @@ const SPRITES = {
 const HERO = {
   maxMental: 20,
   attack: 3,          // 키보드
-  regenEvery: 15,     // n턴마다 멘탈 +1
 };
 
 // ai: melee(쫓아와서 때림) · ranged(한 줄로 보이면 던짐) · grab(붙잡기) · wander(돌아다니다 부름)
@@ -868,9 +867,9 @@ const SANGSA_DEATH_BUFF = 1;
 
 // 아이템. 층마다 min~max 개, chance 는 그 층에 나올 확률
 const ITEM_TYPES = {
-  coffee: { name: '커피', key: 1, min: 1, max: 2, chance: 1, heal: 5 },
-  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.35, turns: 5 }, // 무적. 강해서 드물게
-  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.6, turns: 3 },  // 한 턴에 두 번 행동
+  coffee: { name: '커피', key: 1, min: 2, max: 3, chance: 1, heal: 5 },
+  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.7, turns: 5 },  // 무적. 강해서 한 층에 하나까지
+  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 3 },  // 한 턴에 두 번 행동
 };
 
 // ─────────────────────────────────────────────
@@ -1259,7 +1258,11 @@ function act(dir) {
     const nx = h.x + dx;
     const ny = h.y + dy;
     const target = enemyAt(nx, ny);
-    if (target) {
+    if (target && state.grab && state.grab.by === target) {
+      // 붙잡은 팀장님은 때릴 수 없다 — 버티거나 연차·반차로 빠져나온다
+      state.shake = 4;
+      say('팀장님한테 손을 댈 순 없다… (연차·반차로 탈출)');
+    } else if (target) {
       heroAttack(target);
     } else if (BLOCKING.has(tileAt(nx, ny))) {
       state.shake = 6; // 막힘: 턴을 소모하지 않는다
@@ -1269,7 +1272,7 @@ function act(dir) {
       say('로비 문이 잠겨 있다. 사장님: "퇴근? 누가?"');
       return;
     } else if (state.grab) {
-      // 붙잡힌 동안: 이동은 못 하지만 턴은 흐른다 (반격·아이템은 가능)
+      // 붙잡힌 동안: 이동은 못 하지만 턴은 흐른다 (다른 적 공격·아이템은 가능)
       state.shake = 4;
       say('팀장님이 놓아주지 않는다… (연차·반차로 탈출)');
     } else {
@@ -1303,9 +1306,6 @@ function endHeroAction() {
   state.halfBonus = false;
 
   state.turn += 1;
-  if (state.turn % HERO.regenEvery === 0) {
-    state.mental = Math.min(HERO.maxMental, state.mental + 1);
-  }
   if (state.floor === 1) overtimeTick();
 
   enemiesAct();
