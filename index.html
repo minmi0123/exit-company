@@ -130,6 +130,36 @@
   #items button:disabled { color: #5d5768; }
   #items button:not(:disabled):active { background: #4a4458; }
   #items .key { color: var(--muted); font-size: 12px; }
+  /* 회식에 붙잡혔을 때 쓸 수 있는 탈출 아이템: 눌러 보라고 깜빡인다 */
+  #items button.hint {
+    color: #1d1a22;
+    background: var(--accent);
+    animation: hint 0.8s ease-in-out infinite alternate;
+  }
+  #items button.hint .key { color: #4a4458; }
+  @keyframes hint {
+    from { box-shadow: 0 0 0 0 rgba(255, 226, 122, 0.9); }
+    to   { box-shadow: 0 0 0 5px rgba(255, 226, 122, 0); }
+  }
+  /* 멘탈이 낮으면 화면 가장자리가 붉게 맥박친다 */
+  #stage::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    box-shadow: inset 0 0 40px 12px rgba(217, 67, 74, 0.75);
+    transition: opacity 0.3s;
+  }
+  #stage.danger::after { animation: danger 1s ease-in-out infinite alternate; }
+  @keyframes danger {
+    from { opacity: 0.35; }
+    to   { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #items button.hint { animation: none; }
+    #stage.danger::after { animation: none; opacity: 0.7; }
+  }
   #status b { color: #7fd6a8; font-weight: normal; }
   #status b.bad { color: var(--danger); }
   /* 방향키는 화면 맨 아래로 — 엄지가 닿는 자리 */
@@ -772,6 +802,7 @@ const SPRITES = {
 // ─────────────────────────────────────────────
 const HERO = {
   maxMental: 20,
+  lowMental: 6,       // 이 이하면 위험: 화면 가장자리가 붉어지고 커피 버튼이 깜빡인다
   attack: 3,          // 키보드
   coolerHeal: 3,      // 정수기 한 번 (층마다 새 맵이라 다시 채워진다)
   throwDamage: 2,     // 볼펜 던지기 (원거리). 키보드보다 약하다
@@ -879,7 +910,7 @@ const SANGSA_DEATH_BUFF = 1;
 const ITEM_TYPES = {
   coffee: { name: '커피', key: 1, min: 2, max: 3, chance: 1, heal: 5 },
   annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.7, turns: 5 },  // 무적. 강해서 한 층에 하나까지
-  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 3 },  // 한 턴에 두 번 행동
+  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 5 },  // 이동 한 번에 두 칸
 };
 
 // ─────────────────────────────────────────────
@@ -1164,7 +1195,6 @@ const state = {
   bag: { coffee: 0, annual: 0, half: 0 },
   annualTurns: 0,     // 연차: 남은 무적 턴
   halfTurns: 0,       // 반차: 남은 빠른 턴
-  halfBonus: false,   // 반차: 이번 행동이 "한 번 더" 인지
   grab: null,         // 팀장님에게 붙잡힘 { by: 팀장님, turns: 남은 턴 }
   overtime: 0,        // 퇴근 시간이 밀린 분 (18:00 + overtime)
   over: false,        // 퇴근 성공 또는 멘탈 붕괴
@@ -1193,7 +1223,7 @@ function enterFloor(floorNo) {
   state.shots = [];
   say(floorNo === 1
     ? '1F 로비. 그런데 사장님이 출구를 막고 있다! 퇴근 시간은 18:00.'
-    : floorNo + 'F. 계단을 찾아 내려가자.');
+    : floorNo + 'F. 모두 퇴근시키고 계단으로 내려가자.');
   updateHud();
 }
 
@@ -1208,7 +1238,6 @@ function newRun(seed = randomSeed()) {
   state.annualTurns = 0;
   state.throwCd = 0;
   state.halfTurns = 0;
-  state.halfBonus = false;
   state.over = false;
   document.getElementById('overlay').className = '';
   enterFloor(TOP_FLOOR);
@@ -1229,6 +1258,15 @@ function occupied(x, y) {
     || tileAt(x, y) === 'E'
     || enemyAt(x, y)
     || (state.hero.x === x && state.hero.y === y);
+}
+
+// 계단/출구는 그 층의 적을 모두 퇴근시켜야 열린다. 열려 있으면 null
+function lockedMessage(t) {
+  if (t !== '>' && t !== 'E') return null;
+  if (bossAlive()) return '로비 문이 잠겨 있다. 사장님: "퇴근? 누가?"';
+  const n = state.enemies.length;
+  if (n === 0) return null;
+  return (t === 'E' ? '로비 문' : '계단') + '이 잠겨 있다. 남은 적 ' + n + '명을 먼저 퇴근시키자.';
 }
 
 function bossAlive() {
@@ -1289,9 +1327,9 @@ function act(dir) {
     } else if (BLOCKING.has(tileAt(nx, ny))) {
       state.shake = 6; // 막힘: 턴을 소모하지 않는다
       return;
-    } else if (tileAt(nx, ny) === 'E' && bossAlive()) {
-      state.shake = 6; // 잠긴 출구: 턴을 소모하지 않는다
-      say('로비 문이 잠겨 있다. 사장님: "퇴근? 누가?"');
+    } else if (lockedMessage(tileAt(nx, ny))) {
+      state.shake = 6; // 잠긴 계단/출구: 턴을 소모하지 않는다
+      say(lockedMessage(tileAt(nx, ny)));
       return;
     } else if (state.grab) {
       // 붙잡힌 동안: 이동은 못 하지만 턴은 흐른다 (다른 적 공격·아이템은 가능)
@@ -1300,6 +1338,7 @@ function act(dir) {
     } else {
       moveUnit(h, nx, ny);
       pickUp();
+      if (state.halfTurns > 0) dashStep(dx, dy);
     }
   }
 
@@ -1342,7 +1381,25 @@ function throwPen() {
   endHeroAction();
 }
 
-// 주인공 행동 뒤 공통 처리: 계단/출구 → 반차 → 턴 경과 → 적 행동
+// 반차: 이동하면 같은 방향으로 한 칸 더 (한 턴에 두 칸).
+// 계단/출구에 섰거나, 다음 칸이 막혔거나 적이 있으면 한 칸에서 멈춘다 (자동 공격은 하지 않는다)
+function dashStep(dx, dy) {
+  const h = state.hero;
+  const here = tileAt(h.x, h.y);
+  if (here === '>' || here === 'E') return;
+  const nx = h.x + dx;
+  const ny = h.y + dy;
+  const t = tileAt(nx, ny);
+  if (BLOCKING.has(t) || enemyAt(nx, ny) || lockedMessage(t)) return;
+  const from = { fromX: h.anim.fromX, fromY: h.anim.fromY };
+  moveUnit(h, nx, ny);
+  h.anim.fromX = from.fromX; // 두 칸을 한 번에 미끄러지듯 이동
+  h.anim.fromY = from.fromY;
+  h.step ^= 1;               // 두 번 바뀌면 제자리 → 한 번만 바뀐 것처럼
+  pickUp();
+}
+
+// 주인공 행동 뒤 공통 처리: 계단/출구 → 턴 경과 → 적 행동
 function endHeroAction() {
   const h = state.hero;
   const here = tileAt(h.x, h.y);
@@ -1354,14 +1411,6 @@ function endHeroAction() {
     finish(true);
     return;
   }
-
-  // 반차: 적이 움직이기 전에 한 번 더 행동
-  if (state.halfTurns > 0 && !state.halfBonus) {
-    state.halfBonus = true;
-    updateHud();
-    return;
-  }
-  state.halfBonus = false;
 
   state.turn += 1;
   if (state.floor === 1) overtimeTick();
@@ -1419,8 +1468,7 @@ function useItem(kind) {
     say('연차를 냈다! ' + type.turns + '턴 동안 아무도 나를 건드릴 수 없다.');
   } else if (kind === 'half') {
     state.halfTurns = type.turns;
-    state.halfBonus = false;
-    say('반차를 냈다! ' + type.turns + '턴 동안 두 배로 빠르게 움직인다.');
+    say('반차를 냈다! ' + type.turns + '턴 동안 한 번에 두 칸씩 움직인다.');
   }
   // 연차·반차 = 회식 탈출
   if (kind !== 'coffee' && state.grab) {
@@ -1454,13 +1502,16 @@ function removeEnemy(e) {
   state.enemies = state.enemies.filter((o) => o !== e);
   if (state.grab && state.grab.by === e) state.grab = null;
   if (e.type.ai === 'boss') {
-    say('사장님을 먼저 퇴근시켰다! 로비 문이 열렸다.');
+    say('사장님을 먼저 퇴근시켰다!');
   } else if (e.type.ai === 'wander') {
     // 상사: 쓰러지면서 일을 떠넘긴다 → 남은 적 공격력 상승
     for (const o of state.enemies) o.bonus += SANGSA_DEATH_BUFF;
     say(e.type.obj + ' 먼저 퇴근시켰다. …그런데 일을 떠넘기고 갔다! 남은 적 공격력 +' + SANGSA_DEATH_BUFF);
   } else {
     say(e.type.obj + ' 먼저 퇴근시켰다.');
+  }
+  if (state.enemies.length === 0) {
+    say(state.floor === 1 ? '모두 퇴근했다. 로비 문이 열렸다!' : '모두 퇴근했다. 계단이 열렸다!');
   }
 }
 
@@ -1652,6 +1703,7 @@ function hurtHero(e, dmg, line) {
   }
   state.mental -= dmg;
   state.shake = 8;
+  h.hitAt = performance.now(); // 맞은 순간: 주인공이 좌우로 흔들린다
   popup(h.x, h.y, '-' + dmg, '#ff7a7a');
   say(line + ' 멘탈 -' + dmg);
   if (state.mental <= 0) {
@@ -1728,11 +1780,18 @@ function updateHud() {
   document.getElementById('floor').textContent = state.floor + 'F';
   const m = document.getElementById('mental');
   m.textContent = state.mental + '/' + HERO.maxMental;
-  m.className = state.mental <= HERO.maxMental / 4 ? 'low' : '';
+  const low = state.mental <= HERO.lowMental && !state.over;
+  m.className = state.mental <= HERO.lowMental ? 'low' : '';
+  document.getElementById('stage').classList.toggle('danger', low);
 
   for (const kind of Object.keys(ITEM_TYPES)) {
     document.getElementById('n-' + kind).textContent = state.bag[kind];
-    document.querySelector('#items [data-item="' + kind + '"]').disabled = state.bag[kind] <= 0;
+    const btn = document.querySelector('#items [data-item="' + kind + '"]');
+    btn.disabled = state.bag[kind] <= 0;
+    // 회식 탈출 아이템(연차·반차)을 가지고 있으면 강조
+    // 멘탈이 낮으면 커피를 강조
+    const need = kind === 'coffee' ? low : !!state.grab;
+    btn.classList.toggle('hint', need && state.bag[kind] > 0);
   }
   const effects = [];
   if (state.floor === 1) {
@@ -1845,13 +1904,16 @@ function screenPos(u, now) {
 }
 
 // scale 2 = 보스. 발은 제 칸에 두고 위·옆으로 크게 그린다
-function drawWalker(frames, u, now, scale = 1) {
+const HIT_MS = 300;      // 맞았을 때 흔들리는 시간
+const BOB_MS = 900;      // 바닥 아이템이 한 번 떴다 내려오는 시간
+
+function drawWalker(frames, u, now, scale = 1, dx = 0) {
   const p = screenPos(u, now);
   const set = u.facing < 0 ? frames.left : frames.right;
   const size = TILE * scale;
   const ox = (size - TILE) / 2;
   const oy = size - TILE;
-  ctx.drawImage(set[u.step], Math.round(p.x) - ox, Math.round(p.y) - oy + p.hop, size, size);
+  ctx.drawImage(set[u.step], Math.round(p.x) - ox + dx, Math.round(p.y) - oy + p.hop, size, size);
   return p;
 }
 
@@ -1880,17 +1942,30 @@ function draw() {
     for (let x = x0; x <= x0 + VIEW_W; x++) {
       const img = spriteFor(x, y);
       if (img) ctx.drawImage(img, x * TILE, y * TILE);
+      // 잠긴 계단/출구는 어둡게
+      if (img && lockedMessage(tileAt(x, y))) {
+        ctx.fillStyle = 'rgba(20, 18, 26, 0.55)';
+        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+      }
     }
   }
 
+  // 바닥 아이템: 둥둥 떠 있다. 칸마다 박자를 어긋나게 해서 한꺼번에 움직이지 않게
   for (const it of state.items) {
-    ctx.drawImage(SPRITES[it.kind], it.x * TILE, it.y * TILE);
+    const phase = (now / BOB_MS + (it.x * 7 + it.y * 3) / 10) * Math.PI * 2;
+    const bob = Math.round((Math.sin(phase) - 1) * 1.5); // 0 ~ -3px (위로만 뜬다)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';               // 그림자: 뜰수록 작아진다
+    ctx.fillRect(it.x * TILE + 5 - bob / 2, it.y * TILE + 13, 6 + bob, 2);
+    ctx.drawImage(SPRITES[it.kind], it.x * TILE, it.y * TILE + bob);
   }
 
   const enemyPos = state.enemies.map((e) => drawWalker(SPRITES[e.kind], e, now, e.type.ai === 'boss' ? 2 : 1));
   // 연차 중에는 깜빡인다
   if (state.annualTurns > 0 && Math.floor(now / 120) % 2) ctx.globalAlpha = 0.4;
-  drawWalker(SPRITES.hero, h, now);
+  // 맞았을 때: 좌우로 2px 흔들리다 잦아든다
+  const hitT = h.hitAt ? (now - h.hitAt) / HIT_MS : 1;
+  const hitDx = hitT < 1 ? Math.round(Math.sin(hitT * Math.PI * 6) * 2 * (1 - hitT)) : 0;
+  drawWalker(SPRITES.hero, h, now, 1, hitDx);
   ctx.globalAlpha = 1;
 
   // 체력 막대 · "!" 는 캐릭터 위에 덮어 그린다 (주인공에 가려지지 않게)
