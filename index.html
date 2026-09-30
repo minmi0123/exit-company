@@ -1652,6 +1652,7 @@ function hurtHero(e, dmg, line) {
   }
   state.mental -= dmg;
   state.shake = 8;
+  h.hitAt = performance.now(); // 맞은 순간: 주인공이 좌우로 흔들린다
   popup(h.x, h.y, '-' + dmg, '#ff7a7a');
   say(line + ' 멘탈 -' + dmg);
   if (state.mental <= 0) {
@@ -1845,13 +1846,16 @@ function screenPos(u, now) {
 }
 
 // scale 2 = 보스. 발은 제 칸에 두고 위·옆으로 크게 그린다
-function drawWalker(frames, u, now, scale = 1) {
+const HIT_MS = 300;      // 맞았을 때 흔들리는 시간
+const BOB_MS = 900;      // 바닥 아이템이 한 번 떴다 내려오는 시간
+
+function drawWalker(frames, u, now, scale = 1, dx = 0) {
   const p = screenPos(u, now);
   const set = u.facing < 0 ? frames.left : frames.right;
   const size = TILE * scale;
   const ox = (size - TILE) / 2;
   const oy = size - TILE;
-  ctx.drawImage(set[u.step], Math.round(p.x) - ox, Math.round(p.y) - oy + p.hop, size, size);
+  ctx.drawImage(set[u.step], Math.round(p.x) - ox + dx, Math.round(p.y) - oy + p.hop, size, size);
   return p;
 }
 
@@ -1883,14 +1887,22 @@ function draw() {
     }
   }
 
+  // 바닥 아이템: 둥둥 떠 있다. 칸마다 박자를 어긋나게 해서 한꺼번에 움직이지 않게
   for (const it of state.items) {
-    ctx.drawImage(SPRITES[it.kind], it.x * TILE, it.y * TILE);
+    const phase = (now / BOB_MS + (it.x * 7 + it.y * 3) / 10) * Math.PI * 2;
+    const bob = Math.round((Math.sin(phase) - 1) * 1.5); // 0 ~ -3px (위로만 뜬다)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';               // 그림자: 뜰수록 작아진다
+    ctx.fillRect(it.x * TILE + 5 - bob / 2, it.y * TILE + 13, 6 + bob, 2);
+    ctx.drawImage(SPRITES[it.kind], it.x * TILE, it.y * TILE + bob);
   }
 
   const enemyPos = state.enemies.map((e) => drawWalker(SPRITES[e.kind], e, now, e.type.ai === 'boss' ? 2 : 1));
   // 연차 중에는 깜빡인다
   if (state.annualTurns > 0 && Math.floor(now / 120) % 2) ctx.globalAlpha = 0.4;
-  drawWalker(SPRITES.hero, h, now);
+  // 맞았을 때: 좌우로 2px 흔들리다 잦아든다
+  const hitT = h.hitAt ? (now - h.hitAt) / HIT_MS : 1;
+  const hitDx = hitT < 1 ? Math.round(Math.sin(hitT * Math.PI * 6) * 2 * (1 - hitT)) : 0;
+  drawWalker(SPRITES.hero, h, now, 1, hitDx);
   ctx.globalAlpha = 1;
 
   // 체력 막대 · "!" 는 캐릭터 위에 덮어 그린다 (주인공에 가려지지 않게)
