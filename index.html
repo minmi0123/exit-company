@@ -14,7 +14,8 @@
     --danger: #ff7a7a;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
+  html { height: 100%; }
+  body { margin: 0; min-height: 100%; }
   body {
     background: var(--bg);
     color: var(--text);
@@ -131,7 +132,10 @@
   #items .key { color: var(--muted); font-size: 12px; }
   #status b { color: #7fd6a8; font-weight: normal; }
   #status b.bad { color: var(--danger); }
+  /* 방향키는 화면 맨 아래로 — 엄지가 닿는 자리 */
   #pad {
+    margin-top: auto;
+    padding-bottom: env(safe-area-inset-bottom);
     display: grid;
     grid-template-columns: repeat(3, 64px);
     grid-template-rows: repeat(3, 64px);
@@ -148,10 +152,42 @@
   #pad button:active { background: #4a4458; }
   #pad .up    { grid-column: 2; grid-row: 1; }
   #pad .left  { grid-column: 1; grid-row: 2; }
-  #pad .wait  { grid-column: 2; grid-row: 2; font-size: 14px; }
   #pad .right { grid-column: 3; grid-row: 2; }
   #pad .down  { grid-column: 2; grid-row: 3; }
-  #help { color: var(--muted); font-size: 12px; margin: 0; text-align: center; }
+  /* 처음 켰을 때 조작법 팝업 */
+  #intro {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(20, 18, 26, 0.85);
+  }
+  #intro.show { display: flex; }
+  #intro .box {
+    width: 100%;
+    max-width: 360px;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #intro h2 { margin: 0; font-size: 20px; color: var(--accent); }
+  #intro ul { margin: 0; padding-left: 18px; line-height: 1.7; font-size: 14px; }
+  #intro #seed { color: var(--muted); font-size: 12px; margin: 0; }
+  #intro button {
+    padding: 10px 20px;
+    font-size: 16px;
+    font-family: inherit;
+    background: var(--accent);
+    color: #1d1a22;
+    border: 0;
+    border-radius: 8px;
+  }
   /* 키보드가 있는 환경에서는 패드를 숨긴다 */
   @media (hover: hover) and (pointer: fine) {
     #pad { display: none; }
@@ -188,11 +224,23 @@
 <div id="pad">
   <button class="up" data-dir="up">▲</button>
   <button class="left" data-dir="left">◀</button>
-  <button class="wait" data-dir="wait">대기</button>
   <button class="right" data-dir="right">▶</button>
   <button class="down" data-dir="down">▼</button>
 </div>
-<p id="help">방향키 / WASD 로 이동 · 적 쪽으로 이동하면 키보드 공격 · Space 로 대기 · 1/2/3 으로 아이템 · <span id="seed"></span></p>
+
+<div id="intro" class="show">
+  <div class="box">
+    <h2>조작법</h2>
+    <ul>
+      <li>방향키 / WASD (폰은 아래 방향 패드) 로 이동</li>
+      <li>적 쪽으로 이동하면 키보드 공격</li>
+      <li>Space 로 제자리 대기 (PC)</li>
+      <li>1 / 2 / 3 으로 아이템 (커피 · 연차 · 반차)</li>
+    </ul>
+    <p id="seed"></p>
+    <button id="start">출근하기</button>
+  </div>
+</div>
 
 <script>
 // ─────────────────────────────────────────────
@@ -227,6 +275,13 @@ const PALETTE = {
   v: '#5b6270', // 문틀
   x: '#a8d8ea', // 유리
   u: '#3fbf6f', // 비상구 초록
+  // 사무실 가구
+  a: '#5aa564', // 화분 잎
+  i: '#2f6b3c', // 화분 잎 그림자
+  j: '#b5654a', // 화분
+  A: '#e4e4e8', // 복사기 · 정수기 몸통
+  B: '#a9adb8', // 복사기 · 정수기 그림자
+  C: '#6fb3e0', // 정수기 물통
   // 적 소품 (대문자 = 색을 바꾸지 않는 소품 전용)
   P: '#fbfbf7', // 종이 · 맥주 거품
   L: '#9aa3b5', // 종이 줄
@@ -401,6 +456,128 @@ const DESK = [
   'ffffffffffffffff',
 ];
 
+// 회의 테이블 (2x2 칸). 네 조각으로 잘라 쓴다
+const MEETING = [
+  '................................',
+  '......oooooo........oooooo......',
+  '......ottttoo.......ottttoo.....',
+  '......otttttoo......otttttoo....',
+  '......oooooooo......oooooooo....',
+  '.ooooooooooooooooooooooooooooooo',
+  '.oeeeeeeeeeeeeeeeeeeeeeeeeeeeeeo',
+  '.odddddddddddddddddddddddddddddo',
+  '.odddPPPPdddddddddddddtttttddddo',
+  '.odddPLLPdddddddddddddtllltddddo',
+  '.odddPPPPdddddddddddddtllltddddo',
+  '.odddPLLPdddddddddddddtttttddddo',
+  '.odddPPPPddddddddddddtttttttdddo',
+  '.odddddddddddddddddddddddddddddo',
+  '.odddddddddddddddddddddddddddddo',
+  '.odddddddddddddddddddddddddddddo',
+  '.odddddddddddddddddddddddddddddo',
+  '.oddddddddddddPPPPPddddddddddddo',
+  '.oddddddddddddPLLLPddddddddddddo',
+  '.oddddddddddddPPPPPddddddddddddo',
+  '.odddddddddddddddddddddddddddddo',
+  '.odddddddddddddddddddddddddddddo',
+  '.odddddddddddddddddddddddddddddo',
+  '.odddddddddddddddddddddddddddddo',
+  '.oeeeeeeeeeeeeeeeeeeeeeeeeeeeeeo',
+  '.ooooooooooooooooooooooooooooooo',
+  '..oo........................oo..',
+  '......oooooooo......oooooooo....',
+  '......otttttto......otttttto....',
+  '......otttttto......otttttto....',
+  '......oooooooo......oooooooo....',
+  '................................',
+];
+
+// 화분
+const PLANT = [
+  '................',
+  '......a..a......',
+  '....a.aaia.a....',
+  '...aaiaaaiaa....',
+  '....aaiaiaaaa...',
+  '...aiaaaaiaia...',
+  '....aaiaaaaa....',
+  '.....aaiaaa.....',
+  '......oooo......',
+  '....oooooooo....',
+  '....ojjjjjjo....',
+  '....ojjjjjjo....',
+  '.....ojjjjo.....',
+  '.....ojjjjo.....',
+  '......oooo......',
+  '................',
+];
+
+// 복사기
+const COPIER = [
+  '................',
+  '..oooooooooooo..',
+  '..oBBBBBBBBBBo..',
+  '..oAAAAAAAAAAo..',
+  '.oooooooooooooo.',
+  '.oAAAAAAAAAAAAo.',
+  '.oAtltAAAuAAAAo.',
+  '.oAAAAAAAAAAAAo.',
+  '.oBBBBBBBBBBBBo.',
+  '.oAPPPPPPPPPPAo.',
+  '.oBBBBBBBBBBBBo.',
+  '.oAAAAAAAAAAAAo.',
+  '.oBBBBBBBBBBBBo.',
+  '.oooooooooooooo.',
+  '..oo........oo..',
+  '................',
+];
+
+// 정수기
+const COOLER = [
+  '.....oooooo.....',
+  '....oCCCCCCo....',
+  '....oCxCCCCo....',
+  '....oCxCCCCo....',
+  '....oCCCCCCo....',
+  '.....oooooo.....',
+  '....oAAAAAAo....',
+  '....oArAAlAo....',
+  '....oAAAAAAo....',
+  '....oBBBBBBo....',
+  '....oAAAAAAo....',
+  '....oAAAAAAo....',
+  '....oAAAAAAo....',
+  '....oBBBBBBo....',
+  '....oooooooo....',
+  '................',
+];
+
+// 책장
+const SHELF = [
+  '..oooooooooooo..',
+  '..oeeeeeeeeeeo..',
+  '..oerrydduttno..',
+  '..oerrydduttno..',
+  '..oerrydduttno..',
+  '..oeeeeeeeeeeo..',
+  '..oePPLdyyrdno..',
+  '..oePPLdyyrdno..',
+  '..oePPLdyyrdno..',
+  '..oeeeeeeeeeeo..',
+  '..oeddddddddeo..',
+  '..oedddoodddeo..',
+  '..oeddddddddeo..',
+  '..oeeeeeeeeeeo..',
+  '..oooooooooooo..',
+  '..o..........o..',
+];
+
+// 가구 도트의 '.' 자리에 카펫을 깐다 (가구 칸도 바닥 무늬가 이어져 보이게)
+function onFloor(rows, ox = 0, oy = 0) {
+  return Array.from({ length: TILE }, (_, y) =>
+    [...rows[oy + y].slice(ox, ox + TILE)].map((ch, x) => (ch === '.' ? FLOOR[y][x] : ch)).join(''));
+}
+
 // 내려가는 계단
 const STAIRS = [
   'ffffffffffffffff',
@@ -564,6 +741,11 @@ const SPRITES = {
   wall: makeSprite(WALL),
   wallTop: makeSprite(WALL_TOP),
   desk: makeSprite(DESK),
+  meeting: [[0, 0], [TILE, 0], [0, TILE], [TILE, TILE]].map(([x, y]) => makeSprite(onFloor(MEETING, x, y))),
+  plant: makeSprite(onFloor(PLANT)),
+  copier: makeSprite(onFloor(COPIER)),
+  cooler: makeSprite(onFloor(COOLER)),
+  shelf: makeSprite(onFloor(SHELF)),
   stairs: makeSprite(STAIRS),
   exit: makeSprite(EXIT),
   hero: makeWalker(),
@@ -674,11 +856,11 @@ ENEMY_TYPES.boss = BOSS;
 
 // 층별 적 구성 (5F → 1F). 한 층에 한 종씩 새로 등장
 const ENEMIES_PER_FLOOR = {
-  5: { donggi: 2 },
-  4: { donggi: 2, client: 1 },
-  3: { donggi: 2, client: 1, leader: 1 },
-  2: { donggi: 2, client: 1, leader: 1, sangsa: 1 },
-  1: { donggi: 1, client: 1 },  // 보스 층은 가볍게 (사장님이 동기를 불러오므로)
+  5: { donggi: 3 },
+  4: { donggi: 3, client: 2 },
+  3: { donggi: 3, client: 2, leader: 1 },
+  2: { donggi: 3, client: 2, leader: 2, sangsa: 1 },
+  1: { donggi: 2, client: 1 },  // 보스 층은 가볍게 (사장님이 동기를 불러오므로)
 };
 
 // 상사가 쓰러지면 남은 적 공격력이 이만큼 오른다
@@ -686,19 +868,20 @@ const SANGSA_DEATH_BUFF = 1;
 
 // 아이템. 층마다 min~max 개, chance 는 그 층에 나올 확률
 const ITEM_TYPES = {
-  coffee: { name: '커피', key: 1, min: 1, max: 1, chance: 0.8, heal: 5 },
-  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.2, turns: 5 },  // 무적. 강해서 드물게
-  half:   { name: '반차', key: 3, min: 1, max: 1, chance: 0.35, turns: 3 }, // 한 턴에 두 번 행동
+  coffee: { name: '커피', key: 1, min: 1, max: 2, chance: 1, heal: 5 },
+  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.35, turns: 5 }, // 무적. 강해서 드물게
+  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.6, turns: 3 },  // 한 턴에 두 번 행동
 };
 
 // ─────────────────────────────────────────────
 // 4. 층 자동 생성 — 방 여러 개 + 복도
-//    # 벽  . 바닥  D 책상  > 계단  E 출구(1층)
+//    # 벽  . 바닥  D 책상  T 회의 테이블(2x2)  P 화분  C 복사기  W 정수기  S 책장
+//    > 계단  E 출구(1층)
 // ─────────────────────────────────────────────
 const MAP_W = 32;
 const MAP_H = 24;
 const TOP_FLOOR = 5;
-const BLOCKING = new Set(['#', 'D']);
+const BLOCKING = new Set(['#', 'D', 'T', 'P', 'C', 'W', 'S']);
 const STEPS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 // 시드가 같으면 같은 맵이 나온다 (버그 재현용)
@@ -813,24 +996,76 @@ function generateFloor(floorNo, rng) {
     grid[goal.y][goal.x] = '#';
     // 계단/출구 칸 자체가 유일한 통로면 (책상이 없어도) 막다른 칸이 생긴다 → 맵을 새로 만든다
     if (countReachable(grid, start) !== countWalkable(grid)) continue;
-    for (const r of rooms) {
-      if (r === startRoom || r.w < 6 || r.h < 5) continue;
-      const pairs = randInt(rng, 1, 2);
-      for (let i = 0; i < pairs; i++) {
-        const x = randInt(rng, r.x + 1, r.x + r.w - 3);
-        const y = randInt(rng, r.y + 1, r.y + r.h - 2);
-        if (grid[y][x] !== '.' || grid[y][x + 1] !== '.') continue;
-        grid[y][x] = 'D';
-        grid[y][x + 1] = 'D';
-        if (countReachable(grid, start) !== countWalkable(grid)) {
-          grid[y][x] = '.';
-          grid[y][x + 1] = '.';
-        }
-      }
-    }
+    furnish(grid, rooms, startRoom, start, goal, rng);
     grid[goal.y][goal.x] = floorNo === 1 ? 'E' : '>';
 
     return { grid, start, rooms };
+  }
+}
+
+// 가구 배치. 놓았을 때 걸어갈 수 있는 칸이 끊기면 되돌린다.
+// 시작점·계단 바로 옆은 비워 둔다 (1층 사장님은 출구 옆 빈칸에 선다)
+const WALL_PROPS = ['P', 'P', 'C', 'W', 'S', 'S'];
+function furnish(grid, rooms, startRoom, start, goal, rng) {
+  const near = (x, y, p) => Math.abs(x - p.x) + Math.abs(y - p.y) <= 1;
+  const free = (x, y) => grid[y][x] === '.' && !near(x, y, start) && !near(x, y, goal);
+  const place = (cells, ch) => {
+    if (!cells.every(([x, y]) => free(x, y))) return false;
+    for (const [x, y] of cells) grid[y][x] = ch;
+    if (countReachable(grid, start) === countWalkable(grid)) return true;
+    for (const [x, y] of cells) grid[y][x] = '.';
+    return false;
+  };
+
+  for (const r of rooms) {
+    const isStart = r === startRoom;
+
+    // 회의 테이블: 큰 방 한가운데. 둘레 한 칸은 비워 돌아갈 수 있게
+    if (!isStart && r.w >= 7 && r.h >= 6 && rng() < 0.6) {
+      for (let tries = 0; tries < 6; tries++) {
+        const x = randInt(rng, r.x + 1, r.x + r.w - 3);
+        const y = randInt(rng, r.y + 1, r.y + r.h - 3);
+        let ringFree = true;
+        for (let dy = -1; dy <= 2; dy++) {
+          for (let dx = -1; dx <= 2; dx++) if (grid[y + dy][x + dx] !== '.') ringFree = false;
+        }
+        if (ringFree && place([[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]], 'T')) break;
+      }
+    }
+
+    // 책상 (2칸짜리). 방이 클수록 많이
+    if (r.w >= 6 && r.h >= 5) {
+      const pairs = Math.min(5, Math.floor((r.w * r.h) / 12)) - (isStart ? 1 : 0);
+      let placed = 0;
+      for (let tries = 0; tries < pairs * 3 && placed < pairs; tries++) {
+        const x = randInt(rng, r.x + 1, r.x + r.w - 3);
+        const y = randInt(rng, r.y + 1, r.y + r.h - 2);
+        if (place([[x, y], [x + 1, y]], 'D')) placed++;
+      }
+    }
+
+    // 벽에 붙는 소품: 방 윗줄 (바로 위가 벽인 칸만 — 복도 입구는 피한다)
+    const wallSpots = [];
+    for (let x = r.x; x < r.x + r.w; x++) {
+      if (grid[r.y - 1][x] === '#') wallSpots.push(x);
+    }
+    const count = randInt(rng, 2, 4);
+    for (let i = 0; i < count && wallSpots.length; i++) {
+      const x = wallSpots.splice(randInt(rng, 0, wallSpots.length - 1), 1)[0];
+      place([[x, r.y]], WALL_PROPS[randInt(rng, 0, WALL_PROPS.length - 1)]);
+    }
+
+    // 양옆 벽: 화분 · 정수기 · 복사기를 한두 개
+    const sideSpots = [];
+    for (let y = r.y + 1; y < r.y + r.h; y++) {
+      if (grid[y][r.x - 1] === '#') sideSpots.push([r.x, y]);
+      if (grid[y][r.x + r.w] === '#') sideSpots.push([r.x + r.w - 1, y]);
+    }
+    const sideCount = randInt(rng, 1, 2);
+    for (let i = 0; i < sideCount && sideSpots.length; i++) {
+      const cell = sideSpots.splice(randInt(rng, 0, sideSpots.length - 1), 1)[0];
+      place([cell], 'PPWC'[randInt(rng, 0, 3)]);
+    }
   }
 }
 
@@ -1465,10 +1700,18 @@ function spriteFor(x, y) {
   const t = tileAt(x, y);
   if (t === '.') return SPRITES.floor;
   if (t === 'D') return SPRITES.desk;
+  if (t === 'T') {
+    // 회의 테이블 조각: 왼쪽/위가 테이블이면 오른쪽/아래 조각
+    return SPRITES.meeting[(tileAt(x - 1, y) === 'T' ? 1 : 0) + (tileAt(x, y - 1) === 'T' ? 2 : 0)];
+  }
+  if (t === 'P') return SPRITES.plant;
+  if (t === 'C') return SPRITES.copier;
+  if (t === 'W') return SPRITES.cooler;
+  if (t === 'S') return SPRITES.shelf;
   if (t === '>') return SPRITES.stairs;
   if (t === 'E') return SPRITES.exit;
   // 벽: 아래가 바닥이면 앞면, 주변에 바닥이 있으면 윗면, 아니면 안 그림
-  if (!BLOCKING.has(tileAt(x, y + 1)) || tileAt(x, y + 1) === 'D') return SPRITES.wall;
+  if (tileAt(x, y + 1) !== '#') return SPRITES.wall;
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       if (tileAt(x + dx, y + dy) !== '#') return SPRITES.wallTop;
@@ -1659,7 +1902,19 @@ const ITEM_KEYS = {
   Digit3: 'half', Numpad3: 'half',
 };
 
+const intro = document.getElementById('intro');
+function closeIntro() { intro.classList.remove('show'); }
+document.getElementById('start').addEventListener('click', closeIntro);
+
 window.addEventListener('keydown', (e) => {
+  // 조작법 팝업이 떠 있으면 Enter/Space 로 닫기만 한다
+  if (intro.classList.contains('show')) {
+    if (e.code === 'Enter' || e.code === 'Space') {
+      e.preventDefault();
+      closeIntro();
+    }
+    return;
+  }
   if (state.over && (e.code === 'Enter' || e.code === 'Space')) {
     e.preventDefault();
     newRun();
