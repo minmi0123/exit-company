@@ -152,6 +152,8 @@
   #pad button:active { background: #4a4458; }
   #pad .up    { grid-column: 2; grid-row: 1; }
   #pad .left  { grid-column: 1; grid-row: 2; }
+  #pad .throw { grid-column: 2; grid-row: 2; font-size: 14px; }
+  #pad .throw:disabled { color: #5d5768; }
   #pad .right { grid-column: 3; grid-row: 2; }
   #pad .down  { grid-column: 2; grid-row: 3; }
   /* 처음 켰을 때 조작법 팝업 */
@@ -197,7 +199,7 @@
 <body>
 <header>
   <h1>회사에서 탈출하기</h1>
-  <div id="hud"><b id="floor">5F</b> · 멘탈 <b id="mental">20/20</b> · 턴 <b id="turn">0</b><span id="status"></span></div>
+  <div id="hud"><b id="floor">5F</b> · 멘탈 <b id="mental">20/20</b> · 턴 <b id="turn">0</b> · 적 <b id="enemiesLeft">0</b> · 아이템 <b id="itemsLeft">0</b><span id="status"></span></div>
 </header>
 
 <div id="stage">
@@ -224,6 +226,7 @@
 <div id="pad">
   <button class="up" data-dir="up">▲</button>
   <button class="left" data-dir="left">◀</button>
+  <button class="throw" id="throwBtn">던지기</button>
   <button class="right" data-dir="right">▶</button>
   <button class="down" data-dir="down">▼</button>
 </div>
@@ -234,7 +237,7 @@
     <ul>
       <li>방향키 / WASD (폰은 아래 방향 패드) 로 이동</li>
       <li>적 쪽으로 이동하면 키보드 공격</li>
-      <li>Space 로 제자리 대기 (PC)</li>
+      <li>Space (폰은 가운데 버튼) 로 바라보는 쪽에 볼펜 던지기 — 5칸, 3턴에 한 번</li>
       <li>1 / 2 / 3 으로 아이템 (커피 · 연차 · 반차)</li>
     </ul>
     <p id="seed"></p>
@@ -771,6 +774,9 @@ const HERO = {
   maxMental: 20,
   attack: 3,          // 키보드
   coolerHeal: 3,      // 정수기 한 번 (층마다 새 맵이라 다시 채워진다)
+  throwDamage: 2,     // 볼펜 던지기 (원거리). 키보드보다 약하다
+  throwRange: 5,
+  throwCooldown: 3,   // n턴에 한 번. 없으면 멀리서 계속 던져 동기가 닿기도 전에 쓰러진다
 };
 
 // ai: melee(쫓아와서 때림) · ranged(한 줄로 보이면 던짐) · grab(붙잡기) · wander(돌아다니다 부름)
@@ -1162,9 +1168,10 @@ const state = {
   overtime: 0,        // 퇴근 시간이 밀린 분 (18:00 + overtime)
   over: false,        // 퇴근 성공 또는 멘탈 붕괴
   rng: Math.random,   // 판 안의 무작위(상사 걸음, 대사). 시드가 같으면 같은 판
-  hero: { x: 0, y: 0, facing: 1, step: 0, anim: { fromX: 0, fromY: 0, start: 0 } },
+  hero: { x: 0, y: 0, facing: 1, dir: 'right', step: 0, anim: { fromX: 0, fromY: 0, start: 0 } },
+  throwCd: 0,         // 볼펜 던지기 남은 대기 턴
   popups: [],         // 피해 숫자 (연출)
-  shots: [],          // 고객사가 던진 서류 (연출)
+  shots: [],          // 고객사가 던진 서류 · 주인공이 던진 볼펜 (연출)
   shake: 0,
 };
 
@@ -1198,6 +1205,7 @@ function newRun(seed = randomSeed()) {
   state.mental = HERO.maxMental;
   state.bag = { coffee: 0, annual: 0, half: 0 };
   state.annualTurns = 0;
+  state.throwCd = 0;
   state.halfTurns = 0;
   state.halfBonus = false;
   state.over = false;
@@ -1239,7 +1247,6 @@ const DIRS = {
   down: [0, 1],
   left: [-1, 0],
   right: [1, 0],
-  wait: [0, 0],
 };
 
 function moveUnit(u, nx, ny) {
@@ -1256,8 +1263,9 @@ function act(dir) {
   const [dx, dy] = DIRS[dir];
   const h = state.hero;
   if (dx !== 0) h.facing = dx;
+  h.dir = dir; // 볼펜을 던질 방향
 
-  if (dir !== 'wait') {
+  {
     const nx = h.x + dx;
     const ny = h.y + dy;
     const target = enemyAt(nx, ny);
@@ -1297,6 +1305,42 @@ function act(dir) {
   endHeroAction();
 }
 
+// 볼펜 던지기: 마지막으로 움직인(바라보는) 방향으로 날아가 처음 만난 적을 맞힌다.
+// 맞힐 적이 없거나 대기 중이면 턴을 쓰지 않는다
+function throwPen() {
+  if (state.over) return;
+  beginAction();
+  if (state.throwCd > 0) {
+    say('볼펜을 다시 집는 중… (' + state.throwCd + '턴)');
+    return;
+  }
+  const h = state.hero;
+  const [dx, dy] = DIRS[h.dir];
+  let target = null;
+  let x = h.x;
+  let y = h.y;
+  for (let i = 0; i < HERO.throwRange; i++) {
+    x += dx;
+    y += dy;
+    if (BLOCKING.has(tileAt(x, y))) break;
+    target = enemyAt(x, y);
+    if (target) break;
+  }
+  if (!target) {
+    say('그쪽엔 맞힐 사람이 없다.');
+    return;
+  }
+  if (state.grab && state.grab.by === target) {
+    state.shake = 4;
+    say('팀장님한테 손을 댈 순 없다… (연차·반차로 탈출)');
+    return;
+  }
+  state.shots.push({ fromX: h.x, fromY: h.y, toX: target.x, toY: target.y, start: performance.now(), pen: true });
+  state.throwCd = HERO.throwCooldown;
+  heroAttack(target, HERO.throwDamage, '볼펜');
+  endHeroAction();
+}
+
 // 주인공 행동 뒤 공통 처리: 계단/출구 → 반차 → 턴 경과 → 적 행동
 function endHeroAction() {
   const h = state.hero;
@@ -1324,6 +1368,7 @@ function endHeroAction() {
   enemiesAct();
   if (state.annualTurns > 0) state.annualTurns -= 1;
   if (state.halfTurns > 0) state.halfTurns -= 1;
+  if (state.throwCd > 0) state.throwCd -= 1;
   updateHud();
 }
 
@@ -1385,14 +1430,14 @@ function useItem(kind) {
   endHeroAction();
 }
 
-function heroAttack(e) {
-  e.hp -= HERO.attack;
-  popup(e.x, e.y, '-' + HERO.attack, '#ffe27a');
+function heroAttack(e, dmg = HERO.attack, weapon = '키보드') {
+  e.hp -= dmg;
+  popup(e.x, e.y, '-' + dmg, '#ffe27a');
   if (e.hp <= 0) {
     removeEnemy(e);
     return;
   }
-  say('키보드로 ' + e.type.short + '에게 ' + HERO.attack + ' 피해.');
+  say(weapon + '로 ' + e.type.short + '에게 ' + dmg + ' 피해.');
   if (e.type.ai === 'wander') sangsaCall(e); // 맞으면 알아채고 부른다
   else e.awake = true;
 }
@@ -1663,6 +1708,11 @@ function say(text) {
 
 function updateHud() {
   document.getElementById('turn').textContent = state.turn;
+  document.getElementById('enemiesLeft').textContent = state.enemies.length;
+  document.getElementById('itemsLeft').textContent = state.items.length;
+  const throwBtn = document.getElementById('throwBtn');
+  throwBtn.textContent = state.throwCd > 0 ? '던지기 ' + state.throwCd : '던지기';
+  throwBtn.disabled = state.throwCd > 0;
   document.getElementById('floor').textContent = state.floor + 'F';
   const m = document.getElementById('mental');
   m.textContent = state.mental + '/' + HERO.maxMental;
@@ -1872,12 +1922,20 @@ function draw() {
     if (e.bonus > 0) drawPixelText('+', px, py - 4, '#ff7a7a');
   });
 
-  // 고객사가 던진 서류: 던진 자리에서 주인공까지 날아간다
+  // 고객사가 던진 서류 · 주인공이 던진 볼펜: 던진 자리에서 맞은 자리까지 날아간다
   state.shots = state.shots.filter((s) => now - s.start < SHOT_MS);
   for (const s of state.shots) {
     const k = (now - s.start) / SHOT_MS;
     const sx = Math.round((s.fromX + (s.toX - s.fromX) * k) * TILE) + 6;
     const sy = Math.round((s.fromY + (s.toY - s.fromY) * k) * TILE) + 6;
+    if (s.pen) {
+      const flat = s.fromY === s.toY; // 가로로 날면 눕혀서
+      ctx.fillStyle = PALETTE.o;
+      ctx.fillRect(sx - 1, sy - 1, flat ? 8 : 3, flat ? 3 : 8);
+      ctx.fillStyle = PALETTE.n;
+      ctx.fillRect(sx, sy, flat ? 6 : 1, flat ? 1 : 6);
+      continue;
+    }
     ctx.fillStyle = PALETTE.o;
     ctx.fillRect(sx - 1, sy - 1, 6, 5);
     ctx.fillStyle = PALETTE.P;
@@ -1907,7 +1965,6 @@ const KEYS = {
   ArrowDown: 'down', KeyS: 'down',
   ArrowLeft: 'left', KeyA: 'left',
   ArrowRight: 'right', KeyD: 'right',
-  Space: 'wait',
 };
 
 const ITEM_KEYS = {
@@ -1939,6 +1996,11 @@ window.addEventListener('keydown', (e) => {
     useItem(ITEM_KEYS[e.code]);
     return;
   }
+  if (e.code === 'Space') {
+    e.preventDefault();
+    throwPen();
+    return;
+  }
   const dir = KEYS[e.code];
   if (!dir) return;
   e.preventDefault();
@@ -1955,7 +2017,8 @@ document.querySelectorAll('#items button').forEach((btn) => {
 document.querySelectorAll('#pad button').forEach((btn) => {
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    act(btn.dataset.dir);
+    if (btn.id === 'throwBtn') throwPen();
+    else act(btn.dataset.dir);
   });
 });
 
