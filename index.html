@@ -977,7 +977,7 @@ const BOSS = {
   short: '사장님', obj: '사장님을',
   ai: 'boss',
   hp: 30,             // 볼펜·아이템이 늘어서 18 → 27, 강화가 생겨서 → 30 (2026-09-30)
-  attack: 5,          // 대신 2턴에 한 번만 때린다 (분노하면 매 턴)
+  attack: 4,          // 대신 2턴에 한 번만 때린다 (분노하면 매 턴). 5 는 너무 셌다 (2026-10 플레이 피드백)
   sight: 6,
   summonEvery: 5,     // n턴마다 동기를 옆에 불러온다 ("긴급 회의")
   maxSummons: 3,      // 불려 온 동기는 동시에 최대
@@ -985,7 +985,7 @@ const BOSS = {
   firstSummonDelay: 6,// 알아챈 뒤 첫 소집까지 기다리는 턴
   actEvery: 2,        // 바쁜 사장님: 2턴에 한 번 행동. 행동 직전 턴엔 머리 위 빨간 "!"
   overtimeEvery: 8,   // 알아챈 뒤 n턴마다 퇴근 시간 30분 밀림 + 공격력 +1
-  overtimeMaxBonus: 3,
+  overtimeMaxBonus: 2,
   lines: [
     '사장님: "요즘 애들은 끈기가 없어."',
     '사장님: "내일 아침까지 되지?"',
