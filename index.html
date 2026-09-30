@@ -130,6 +130,20 @@
   #items button:disabled { color: #5d5768; }
   #items button:not(:disabled):active { background: #4a4458; }
   #items .key { color: var(--muted); font-size: 12px; }
+  /* 회식에 붙잡혔을 때 쓸 수 있는 탈출 아이템: 눌러 보라고 깜빡인다 */
+  #items button.hint {
+    color: #1d1a22;
+    background: var(--accent);
+    animation: hint 0.8s ease-in-out infinite alternate;
+  }
+  #items button.hint .key { color: #4a4458; }
+  @keyframes hint {
+    from { box-shadow: 0 0 0 0 rgba(255, 226, 122, 0.9); }
+    to   { box-shadow: 0 0 0 5px rgba(255, 226, 122, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #items button.hint { animation: none; }
+  }
   #status b { color: #7fd6a8; font-weight: normal; }
   #status b.bad { color: var(--danger); }
   /* 방향키는 화면 맨 아래로 — 엄지가 닿는 자리 */
@@ -1733,7 +1747,10 @@ function updateHud() {
 
   for (const kind of Object.keys(ITEM_TYPES)) {
     document.getElementById('n-' + kind).textContent = state.bag[kind];
-    document.querySelector('#items [data-item="' + kind + '"]').disabled = state.bag[kind] <= 0;
+    const btn = document.querySelector('#items [data-item="' + kind + '"]');
+    btn.disabled = state.bag[kind] <= 0;
+    // 회식 탈출 아이템(연차·반차)을 가지고 있으면 강조
+    btn.classList.toggle('hint', !!state.grab && kind !== 'coffee' && state.bag[kind] > 0);
   }
   const effects = [];
   if (state.floor === 1) {
