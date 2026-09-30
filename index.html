@@ -844,11 +844,12 @@ const BOSS = {
   name: '야근 강요하는 사장님',
   short: '사장님', obj: '사장님을',
   ai: 'boss',
-  hp: 18,             // 키보드 6방
-  attack: 4,          // 대신 2턴에 한 번만 때린다
+  hp: 27,             // 키보드 9방 (볼펜·아이템이 늘어서 18 → 27, 2026-09-30)
+  attack: 5,          // 대신 2턴에 한 번만 때린다 (분노하면 매 턴)
   sight: 6,
-  summonEvery: 6,     // n턴마다 동기를 옆에 불러온다 ("긴급 회의")
-  maxSummons: 2,      // 불려 온 동기는 동시에 최대
+  summonEvery: 5,     // n턴마다 동기를 옆에 불러온다 ("긴급 회의")
+  maxSummons: 3,      // 불려 온 동기는 동시에 최대
+  enrageAt: 0.5,      // 체력이 이 비율 이하로 떨어지면 분노: 매 턴 행동
   firstSummonDelay: 6,// 알아챈 뒤 첫 소집까지 기다리는 턴
   actEvery: 2,        // 바쁜 사장님: 2턴에 한 번 행동. 행동 직전 턴엔 머리 위 빨간 "!"
   overtimeEvery: 8,   // 알아챈 뒤 n턴마다 퇴근 시간 30분 밀림 + 공격력 +1
@@ -1438,6 +1439,13 @@ function heroAttack(e, dmg = HERO.attack, weapon = '키보드') {
     return;
   }
   say(weapon + '로 ' + e.type.short + '에게 ' + dmg + ' 피해.');
+  if (e.type.ai === 'boss' && !e.enraged && e.hp <= e.type.hp * BOSS.enrageAt) {
+    e.enraged = true;
+    e.busy = 0;
+    state.shake = 8;
+    say('사장님이 넥타이를 풀었다! "오늘 아무도 못 가!" 이제 매 턴 움직인다.');
+    return;
+  }
   if (e.type.ai === 'wander') sangsaCall(e); // 맞으면 알아채고 부른다
   else e.awake = true;
 }
@@ -1500,6 +1508,10 @@ function chase(e, toHero, d) {
 }
 
 // 사장님: 알아채면 n턴마다 동기를 옆에 불러오고, 옆에 오면 때린다
+function bossActEvery(e) {
+  return e.enraged ? 1 : BOSS.actEvery;
+}
+
 function bossTurn(e, adjacent) {
   if (!e.awake) return true; // 알아채기 전엔 출구 앞에서 기다린다
   if (!e.started) {
@@ -1507,9 +1519,9 @@ function bossTurn(e, adjacent) {
     e.cooldown = BOSS.firstSummonDelay;
     e.busy = 0;
   }
-  // 바쁜 사장님: actEvery 턴에 한 번만 움직이거나 때린다
-  if (BOSS.actEvery > 1) {
-    e.busy = (e.busy + 1) % BOSS.actEvery;
+  // 바쁜 사장님: actEvery 턴에 한 번만 움직이거나 때린다 (분노하면 매 턴)
+  if (bossActEvery(e) > 1) {
+    e.busy = (e.busy + 1) % bossActEvery(e);
     if (e.busy !== 0) return true;
   }
   const summoned = state.enemies.filter((o) => o.summoned).length;
@@ -1737,6 +1749,7 @@ function updateHud() {
   bar.className = boss && boss.awake && !state.over ? 'show' : '';
   if (boss) {
     document.getElementById('bossfill').style.width = (100 * boss.hp / boss.type.hp) + '%';
+    document.getElementById('bossfill').style.background = boss.enraged ? 'var(--danger)' : '';
     document.getElementById('bossbonus').textContent = boss.bonus > 0 ? ' 공격력 +' + boss.bonus : '';
   }
 }
@@ -1886,7 +1899,7 @@ function draw() {
     if (e.type.ai === 'boss') {
       // 체력은 화면 위 큰 막대. 다음 턴에 행동할 차례면 머리 위 빨간 "!" (예고)
       // 2배 그림의 오른쪽 위 빈 곳 (머리 위에 두면 맨 윗줄에서 화면 밖으로 나간다)
-      if (e.started && BOSS.actEvery > 1 && e.busy === BOSS.actEvery - 1) {
+      if (e.started && e.busy === bossActEvery(e) - 1) {
         const bx = Math.round(p.x) + 19;
         const by = Math.round(p.y) - 15;
         ctx.fillStyle = PALETTE.o;
