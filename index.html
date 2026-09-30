@@ -1206,7 +1206,7 @@ function enterFloor(floorNo) {
   state.shots = [];
   say(floorNo === 1
     ? '1F 로비. 그런데 사장님이 출구를 막고 있다! 퇴근 시간은 18:00.'
-    : floorNo + 'F. 계단을 찾아 내려가자.');
+    : floorNo + 'F. 모두 퇴근시키고 계단으로 내려가자.');
   updateHud();
 }
 
@@ -1241,6 +1241,15 @@ function occupied(x, y) {
     || tileAt(x, y) === 'E'
     || enemyAt(x, y)
     || (state.hero.x === x && state.hero.y === y);
+}
+
+// 계단/출구는 그 층의 적을 모두 퇴근시켜야 열린다. 열려 있으면 null
+function lockedMessage(t) {
+  if (t !== '>' && t !== 'E') return null;
+  if (bossAlive()) return '로비 문이 잠겨 있다. 사장님: "퇴근? 누가?"';
+  const n = state.enemies.length;
+  if (n === 0) return null;
+  return (t === 'E' ? '로비 문' : '계단') + '이 잠겨 있다. 남은 적 ' + n + '명을 먼저 퇴근시키자.';
 }
 
 function bossAlive() {
@@ -1301,9 +1310,9 @@ function act(dir) {
     } else if (BLOCKING.has(tileAt(nx, ny))) {
       state.shake = 6; // 막힘: 턴을 소모하지 않는다
       return;
-    } else if (tileAt(nx, ny) === 'E' && bossAlive()) {
-      state.shake = 6; // 잠긴 출구: 턴을 소모하지 않는다
-      say('로비 문이 잠겨 있다. 사장님: "퇴근? 누가?"');
+    } else if (lockedMessage(tileAt(nx, ny))) {
+      state.shake = 6; // 잠긴 계단/출구: 턴을 소모하지 않는다
+      say(lockedMessage(tileAt(nx, ny)));
       return;
     } else if (state.grab) {
       // 붙잡힌 동안: 이동은 못 하지만 턴은 흐른다 (다른 적 공격·아이템은 가능)
@@ -1364,7 +1373,7 @@ function dashStep(dx, dy) {
   const nx = h.x + dx;
   const ny = h.y + dy;
   const t = tileAt(nx, ny);
-  if (BLOCKING.has(t) || enemyAt(nx, ny) || (t === 'E' && bossAlive())) return;
+  if (BLOCKING.has(t) || enemyAt(nx, ny) || lockedMessage(t)) return;
   const from = { fromX: h.anim.fromX, fromY: h.anim.fromY };
   moveUnit(h, nx, ny);
   h.anim.fromX = from.fromX; // 두 칸을 한 번에 미끄러지듯 이동
@@ -1476,13 +1485,16 @@ function removeEnemy(e) {
   state.enemies = state.enemies.filter((o) => o !== e);
   if (state.grab && state.grab.by === e) state.grab = null;
   if (e.type.ai === 'boss') {
-    say('사장님을 먼저 퇴근시켰다! 로비 문이 열렸다.');
+    say('사장님을 먼저 퇴근시켰다!');
   } else if (e.type.ai === 'wander') {
     // 상사: 쓰러지면서 일을 떠넘긴다 → 남은 적 공격력 상승
     for (const o of state.enemies) o.bonus += SANGSA_DEATH_BUFF;
     say(e.type.obj + ' 먼저 퇴근시켰다. …그런데 일을 떠넘기고 갔다! 남은 적 공격력 +' + SANGSA_DEATH_BUFF);
   } else {
     say(e.type.obj + ' 먼저 퇴근시켰다.');
+  }
+  if (state.enemies.length === 0) {
+    say(state.floor === 1 ? '모두 퇴근했다. 로비 문이 열렸다!' : '모두 퇴근했다. 계단이 열렸다!');
   }
 }
 
@@ -1909,6 +1921,11 @@ function draw() {
     for (let x = x0; x <= x0 + VIEW_W; x++) {
       const img = spriteFor(x, y);
       if (img) ctx.drawImage(img, x * TILE, y * TILE);
+      // 잠긴 계단/출구는 어둡게
+      if (img && lockedMessage(tileAt(x, y))) {
+        ctx.fillStyle = 'rgba(20, 18, 26, 0.55)';
+        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+      }
     }
   }
 
