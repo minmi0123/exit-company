@@ -893,7 +893,7 @@ const SANGSA_DEATH_BUFF = 1;
 const ITEM_TYPES = {
   coffee: { name: '커피', key: 1, min: 2, max: 3, chance: 1, heal: 5 },
   annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.7, turns: 5 },  // 무적. 강해서 한 층에 하나까지
-  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 3 },  // 한 턴에 두 번 행동
+  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 5 },  // 이동 한 번에 두 칸
 };
 
 // ─────────────────────────────────────────────
@@ -1178,7 +1178,6 @@ const state = {
   bag: { coffee: 0, annual: 0, half: 0 },
   annualTurns: 0,     // 연차: 남은 무적 턴
   halfTurns: 0,       // 반차: 남은 빠른 턴
-  halfBonus: false,   // 반차: 이번 행동이 "한 번 더" 인지
   grab: null,         // 팀장님에게 붙잡힘 { by: 팀장님, turns: 남은 턴 }
   overtime: 0,        // 퇴근 시간이 밀린 분 (18:00 + overtime)
   over: false,        // 퇴근 성공 또는 멘탈 붕괴
@@ -1222,7 +1221,6 @@ function newRun(seed = randomSeed()) {
   state.annualTurns = 0;
   state.throwCd = 0;
   state.halfTurns = 0;
-  state.halfBonus = false;
   state.over = false;
   document.getElementById('overlay').className = '';
   enterFloor(TOP_FLOOR);
@@ -1314,6 +1312,7 @@ function act(dir) {
     } else {
       moveUnit(h, nx, ny);
       pickUp();
+      if (state.halfTurns > 0) dashStep(dx, dy);
     }
   }
 
@@ -1356,7 +1355,25 @@ function throwPen() {
   endHeroAction();
 }
 
-// 주인공 행동 뒤 공통 처리: 계단/출구 → 반차 → 턴 경과 → 적 행동
+// 반차: 이동하면 같은 방향으로 한 칸 더 (한 턴에 두 칸).
+// 계단/출구에 섰거나, 다음 칸이 막혔거나 적이 있으면 한 칸에서 멈춘다 (자동 공격은 하지 않는다)
+function dashStep(dx, dy) {
+  const h = state.hero;
+  const here = tileAt(h.x, h.y);
+  if (here === '>' || here === 'E') return;
+  const nx = h.x + dx;
+  const ny = h.y + dy;
+  const t = tileAt(nx, ny);
+  if (BLOCKING.has(t) || enemyAt(nx, ny) || (t === 'E' && bossAlive())) return;
+  const from = { fromX: h.anim.fromX, fromY: h.anim.fromY };
+  moveUnit(h, nx, ny);
+  h.anim.fromX = from.fromX; // 두 칸을 한 번에 미끄러지듯 이동
+  h.anim.fromY = from.fromY;
+  h.step ^= 1;               // 두 번 바뀌면 제자리 → 한 번만 바뀐 것처럼
+  pickUp();
+}
+
+// 주인공 행동 뒤 공통 처리: 계단/출구 → 턴 경과 → 적 행동
 function endHeroAction() {
   const h = state.hero;
   const here = tileAt(h.x, h.y);
@@ -1368,14 +1385,6 @@ function endHeroAction() {
     finish(true);
     return;
   }
-
-  // 반차: 적이 움직이기 전에 한 번 더 행동
-  if (state.halfTurns > 0 && !state.halfBonus) {
-    state.halfBonus = true;
-    updateHud();
-    return;
-  }
-  state.halfBonus = false;
 
   state.turn += 1;
   if (state.floor === 1) overtimeTick();
@@ -1433,8 +1442,7 @@ function useItem(kind) {
     say('연차를 냈다! ' + type.turns + '턴 동안 아무도 나를 건드릴 수 없다.');
   } else if (kind === 'half') {
     state.halfTurns = type.turns;
-    state.halfBonus = false;
-    say('반차를 냈다! ' + type.turns + '턴 동안 두 배로 빠르게 움직인다.');
+    say('반차를 냈다! ' + type.turns + '턴 동안 한 번에 두 칸씩 움직인다.');
   }
   // 연차·반차 = 회식 탈출
   if (kind !== 'coffee' && state.grab) {
