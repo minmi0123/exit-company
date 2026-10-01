@@ -95,6 +95,7 @@
   #overlay.lose h2 { color: var(--danger); }
   #overlay p { margin: 0; color: var(--text); }
   #overlay #best { color: var(--muted); font-size: 14px; }
+  #overlay #seed { color: var(--muted); font-size: 12px; }
   /* 계단에서 고르는 강화 카드 */
   #perk {
     position: absolute;
@@ -163,6 +164,115 @@
     border: 0;
     border-radius: 8px;
   }
+  /* 시작화면 — 스테이지를 덮는다 (결과 화면보다 위) */
+  #title {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--bg);
+    border: 2px solid var(--panel);
+    text-align: center;
+    padding: 8px 16px;
+  }
+  #title.show { display: flex; }
+  #titleArt {
+    width: min(58%, 336px);
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #title p { margin: 0; font-size: 14px; }
+  #titleBest { color: var(--muted); font-size: 12px !important; min-height: 1em; }
+  #title .buttons { display: flex; gap: 8px; margin-top: 4px; }
+  #title button {
+    padding: 10px 20px;
+    font-size: 16px;
+    font-family: inherit;
+    background: var(--accent);
+    color: #1d1a22;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  #title button.sub { background: var(--panel); color: var(--text); }
+  /* 메뉴얼 — 폰에서도 읽기 편하게 화면 전체를 덮는다 */
+  #manual {
+    position: fixed;
+    inset: 0;
+    display: none;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 16px;
+    background: rgba(20, 18, 26, 0.9);
+    z-index: 10;
+  }
+  #manual.show { display: flex; }
+  #manual .panel {
+    width: 100%;
+    max-width: 560px;
+    max-height: 100%;
+    overflow-y: auto;
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 0 16px 16px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  #manual .bar {
+    position: sticky;
+    top: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0 8px;
+    background: var(--panel);
+  }
+  #manual h2 { margin: 0; font-size: 18px; color: var(--accent); }
+  #manual h3 { margin: 14px 0 6px; font-size: 15px; color: var(--accent); }
+  #manual p { margin: 0; }
+  #manual button {
+    padding: 6px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg);
+    color: var(--text);
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  #manual ul { margin: 0; padding: 0; list-style: none; }
+  #manual .howto li { display: grid; grid-template-columns: 4.5em 1fr; }
+  #manual .howto li b { color: var(--muted); font-weight: normal; }
+  #manual .cards { display: flex; flex-direction: column; gap: 8px; }
+  #manual .cards li {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 8px;
+    background: var(--bg);
+    border-radius: 8px;
+  }
+  #manual .cards img {
+    flex: none;
+    width: 48px;
+    height: 48px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #manual .cards .name { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+  #manual .cards .name b { font-weight: normal; }
+  #manual .tag {
+    font-size: 12px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: #4a4458;
+    color: var(--accent);
+  }
+  #manual .tag.where { color: var(--muted); background: transparent; padding: 0; }
+  #manual .cards .desc { color: var(--muted); }
   #msg {
     margin: 0;
     min-height: 1.4em;
@@ -244,40 +354,6 @@
   #pad .throw:disabled { color: #5d5768; }
   #pad .right { grid-column: 3; grid-row: 2; }
   #pad .down  { grid-column: 2; grid-row: 3; }
-  /* 처음 켰을 때 조작법 팝업 */
-  #intro {
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    background: rgba(20, 18, 26, 0.85);
-  }
-  #intro.show { display: flex; }
-  #intro .box {
-    width: 100%;
-    max-width: 360px;
-    background: var(--panel);
-    border-radius: 12px;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  #intro h2 { margin: 0; font-size: 20px; color: var(--accent); }
-  #intro ul { margin: 0; padding-left: 18px; line-height: 1.7; font-size: 14px; }
-  #intro #seed { color: var(--muted); font-size: 12px; margin: 0; }
-  #intro button {
-    padding: 10px 20px;
-    font-size: 16px;
-    font-family: inherit;
-    background: var(--accent);
-    color: #1d1a22;
-    border: 0;
-    border-radius: 8px;
-  }
   /* 키보드가 있는 환경에서는 패드를 숨긴다 */
   @media (hover: hover) and (pointer: fine) {
     #pad { display: none; }
@@ -307,7 +383,41 @@
     <div id="score"></div>
     <p id="perks"></p>
     <p id="best"></p>
-    <button id="restart">다시 출근하기</button>
+    <p id="seed"></p>
+    <button id="restart">야근하기</button>
+  </div>
+  <div id="title" class="show">
+    <canvas id="titleArt"></canvas>
+    <p id="titleSub">오늘도 무사히 퇴근할 수 있을까?</p>
+    <p id="titleBest"></p>
+    <div class="buttons">
+      <button id="startBtn">퇴근하기</button>
+      <button id="manualBtn" class="sub">메뉴얼</button>
+    </div>
+  </div>
+</div>
+
+<div id="manual" role="dialog" aria-modal="true" aria-labelledby="manualTitle">
+  <div class="panel">
+    <div class="bar">
+      <h2 id="manualTitle">신입사원 메뉴얼</h2>
+      <button id="manualClose">닫기</button>
+    </div>
+    <h3>목표</h3>
+    <p>5F 부터 한 층씩 내려가 1F 로비 문으로 퇴근한다. 층마다 적을 모두 퇴근시켜야 계단이 열린다. 멘탈이 바닥나면 처음부터 다시 출근.</p>
+    <h3>조작</h3>
+    <ul class="howto">
+      <li><b>이동</b> 방향키 / WASD (폰은 화면 아래 패드)</li>
+      <li><b>공격</b> 적 쪽으로 이동하면 키보드로 공격</li>
+      <li><b>던지기</b> Space (폰은 패드 가운데) 로 볼펜 던지기. 가장 가까운 적(노란 꺾쇠)을 자동 조준, 던진 뒤 잠깐 다시 집어야 한다</li>
+      <li><b>아이템</b> 밟으면 줍고, 1 / 2 / 3 키나 아래 버튼으로 사용 (쓰면 한 턴 지남)</li>
+      <li><b>멘탈</b> 저절로 회복되지 않는다. 커피를 마시거나 정수기에 부딪혀 회복</li>
+      <li><b>강화</b> 계단을 내려갈 때마다 두 장 중 하나를 고른다</li>
+    </ul>
+    <h3>적</h3>
+    <ul class="cards" id="manualEnemies"></ul>
+    <h3>아이템</h3>
+    <ul class="cards" id="manualItems"></ul>
   </div>
 </div>
 <p id="msg"></p>
@@ -326,20 +436,6 @@
   <button class="down" data-dir="down">▼</button>
 </div>
 
-<div id="intro" class="show">
-  <div class="box">
-    <h2>조작법</h2>
-    <ul>
-      <li>방향키 / WASD (폰은 아래 방향 패드) 로 이동</li>
-      <li>적 쪽으로 이동하면 키보드 공격</li>
-      <li>Space (폰은 가운데 버튼) 로 볼펜 던지기 — 7칸 안 가장 가까운 적(노란 꺾쇠)을 자동 조준, 3턴에 한 번</li>
-      <li>1 / 2 / 3 으로 아이템 (커피 · 연차 · 반차)</li>
-      <li>계단을 내려갈 때마다 강화 두 장 중 하나를 고른다</li>
-    </ul>
-    <p id="seed"></p>
-    <button id="start">출근하기</button>
-  </div>
-</div>
 
 <script>
 // ─────────────────────────────────────────────
@@ -918,6 +1014,7 @@ const ENEMY_TYPES = {
     name: '일 못하는 동기',
     short: '동기', obj: '동기를',
     ai: 'melee',
+    desc: '가장 흔한 적. 알아채면 쫓아와서 때린다.',
     hp: 6,            // 키보드 2방
     attack: 3,
     sight: 8,         // 이 거리 안에 들어오면 알아채고 쫓아온다
@@ -932,6 +1029,7 @@ const ENEMY_TYPES = {
     name: '요구가 많은 고객사',
     short: '고객사', obj: '고객사를',
     ai: 'ranged',
+    desc: '같은 줄에 막힘없이 보이면 멀리서 "수정 요청" 서류를 던진다. 던진 뒤엔 잠깐 쉰다. 맷집은 약하다.',
     hp: 3,            // 키보드 1방. 대신 멀리서 때린다
     attack: 3,
     range: 5,         // 같은 줄(가로/세로)로 막힘 없이 이 거리 안이면 던진다
@@ -947,6 +1045,7 @@ const ENEMY_TYPES = {
     name: '회식 좋아하는 팀장님',
     short: '팀장님', obj: '팀장님을',
     ai: 'grab',
+    desc: '옆에 붙으면 회식에 붙잡는다. 붙잡힌 동안 못 움직이고 매 턴 멘탈이 깎이며, 팀장님을 때릴 수도 없다. 연차·반차로 빠져나오거나, 버티면 풀려난다.',
     hp: 9,            // 키보드 3방
     attack: 2,        // 붙잡기 대기 중(쿨다운)일 때 그냥 때리는 피해
     grabDamage: 2,    // 붙잡힌 동안 매 턴
@@ -963,6 +1062,7 @@ const ENEMY_TYPES = {
     name: '능력없는 상사',
     short: '상사', obj: '상사를',
     ai: 'wander',
+    desc: '헤드폰을 끼고 돌아다니기만 한다. 가까이 가거나 때리면 같은 방 적을 부른다. 쓰러뜨리면 일을 떠넘겨 남은 적이 강해진다.',
     hp: 6,
     attack: 0,        // 직접 공격하지 않는다
     notice: 2,        // 이 거리 안에 들어오면 알아채고 적을 부른다
@@ -976,6 +1076,7 @@ const BOSS = {
   name: '야근 강요하는 사장님',
   short: '사장님', obj: '사장님을',
   ai: 'boss',
+  desc: '1층 로비 문을 막고 있다. 쓰러뜨려야 문이 열린다. 알아챈 뒤로 퇴근 시간이 밀리며 점점 세지고, "긴급 회의"로 동기를 불러온다. 평소엔 바빠서 한 턴씩 걸러 움직이지만 (머리 위 "!" = 다음 턴에 행동), 궁지에 몰리면 분노해서 매 턴 움직인다.',
   hp: 30,             // 볼펜·아이템이 늘어서 18 → 27, 강화가 생겨서 → 30 (2026-09-30)
   attack: 4,          // 대신 2턴에 한 번만 때린다 (분노하면 매 턴). 5 는 너무 셌다 (2026-10 플레이 피드백)
   sight: 6,
@@ -1008,10 +1109,14 @@ const ENEMIES_PER_FLOOR = {
 const SANGSA_DEATH_BUFF = 1;
 
 // 아이템. 층마다 min~max 개, chance 는 그 층에 나올 확률
+// tag/desc: 메뉴얼에 보이는 글 (수치는 쓰지 않는다)
 const ITEM_TYPES = {
-  coffee: { name: '커피', key: 1, min: 2, max: 3, chance: 1, heal: 5 },
-  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.7, turns: 5 },  // 무적. 강해서 한 층에 하나까지
-  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 5 },  // 이동 한 번에 두 칸
+  coffee: { name: '커피', key: 1, min: 2, max: 3, chance: 1, heal: 5,
+    tag: '회복', desc: '멘탈을 회복한다. 가장 자주 나온다.' },
+  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.7, turns: 5,  // 무적. 강해서 한 층에 하나까지
+    tag: '무적 · 탈출', desc: '잠시 무적이 된다. 팀장님에게 붙잡혔을 때 쓰면 빠져나온다.' },
+  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 5,  // 이동 한 번에 두 칸
+    tag: '가속 · 탈출', desc: '잠시 이동 한 번에 두 칸씩 간다. 팀장님에게 붙잡혔을 때 쓰면 빠져나온다.' },
 };
 
 // ─────────────────────────────────────────────
@@ -1304,6 +1409,7 @@ const state = {
   grab: null,         // 팀장님에게 붙잡힘 { by: 팀장님, turns: 남은 턴 }
   overtime: 0,        // 퇴근 시간이 밀린 분 (18:00 + overtime)
   over: false,        // 퇴근 성공 또는 멘탈 붕괴
+  screen: 'title',    // title(시작화면) · play(게임 중). 결과 화면은 play + over
   rng: Math.random,   // 판 안의 무작위(상사 걸음, 대사). 시드가 같으면 같은 판
   hero: { x: 0, y: 0, facing: 1, step: 0, anim: { fromX: 0, fromY: 0, start: 0 } },
   throwCd: 0,         // 볼펜 던지기 남은 대기 턴
@@ -1401,6 +1507,7 @@ function newRun(seed = randomSeed()) {
   state.stats = { kills: 0, items: 0 };
   state.halfTurns = 0;
   state.over = false;
+  clearTimeout(overlayTimer);
   document.getElementById('overlay').className = '';
   enterFloor(TOP_FLOOR);
 }
@@ -1459,7 +1566,7 @@ function moveUnit(u, nx, ny) {
 }
 
 function act(dir) {
-  if (state.over || state.choosing) return;
+  if (state.over || state.choosing || state.screen !== 'play') return;
   beginAction();
   const [dx, dy] = DIRS[dir];
   const h = state.hero;
@@ -1538,7 +1645,7 @@ function clearShot(a, b) {
 // 볼펜 던지기: 가장 가까운 적에게 자동으로 날아간다.
 // 맞힐 적이 없거나 대기 중이면 턴을 쓰지 않는다
 function throwPen() {
-  if (state.over || state.choosing) return;
+  if (state.over || state.choosing || state.screen !== 'play') return;
   beginAction();
   if (state.throwCd > 0) {
     say('볼펜을 다시 집는 중… (' + state.throwCd + '턴)');
@@ -1630,7 +1737,7 @@ function pickUp() {
 }
 
 function useItem(kind) {
-  if (state.over || state.choosing) return;
+  if (state.over || state.choosing || state.screen !== 'play') return;
   beginAction();
   if (state.bag[kind] <= 0) {
     say(ITEM_TYPES[kind].name + '가 없다.');
@@ -1978,6 +2085,8 @@ function saveBest(reached) {
   return best;
 }
 
+let overlayTimer = 0; // 결과 화면을 늦게 띄우는 타이머 (그 사이 시작화면으로 가면 취소)
+
 function finish(cleared) {
   state.over = true;
   updateHud();
@@ -1996,7 +2105,7 @@ function finish(cleared) {
   // 퇴근 성공이면 점수 쪽에 최고 점수가 나오므로 층 기록은 실패했을 때만
   document.getElementById('best').textContent = cleared ? '' : '최고 기록: '
     + (best === 0 ? '퇴근 성공' : best + 'F 까지');
-  setTimeout(() => {
+  overlayTimer = setTimeout(() => {
     overlay.className = cleared ? 'show scored' : 'show lose';
   }, 250);
 }
@@ -2319,16 +2428,21 @@ const ITEM_KEYS = {
   Digit3: 'half', Numpad3: 'half',
 };
 
-const intro = document.getElementById('intro');
-function closeIntro() { intro.classList.remove('show'); }
-document.getElementById('start').addEventListener('click', closeIntro);
-
 window.addEventListener('keydown', (e) => {
-  // 조작법 팝업이 떠 있으면 Enter/Space 로 닫기만 한다
-  if (intro.classList.contains('show')) {
-    if (e.code === 'Enter' || e.code === 'Space') {
+  const ok = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
+  if (manualOpen()) {
+    if (ok || e.code === 'Escape') {
       e.preventDefault();
-      closeIntro();
+      closeManual();
+    }
+    return;
+  }
+  if (state.screen === 'title') {
+    if (ok) {
+      e.preventDefault();
+      startGame();
+    } else if (e.code === 'KeyM') {
+      openManual();
     }
     return;
   }
@@ -2341,9 +2455,9 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
-  if (state.over && (e.code === 'Enter' || e.code === 'Space')) {
+  if (state.over && ok) {
     e.preventDefault();
-    newRun();
+    showTitle();
     return;
   }
   if (ITEM_KEYS[e.code]) {
@@ -2377,9 +2491,223 @@ document.querySelectorAll('#pad button').forEach((btn) => {
   });
 });
 
-document.getElementById('restart').addEventListener('click', () => newRun());
+// ─────────────────────────────────────────────
+// 10. 시작화면 · 메뉴얼
+//     시작화면 그림: 48x32 도트. 퇴근 시각 18:00 벽시계 + 책상에 앉은 신입사원
+// ─────────────────────────────────────────────
+const SCENE_W = 48;
+const SCENE_H = 32;
 
-newRun(Number(params.get('seed')) || randomSeed());
+const SCENE_PAPERS = [ // 산더미 서류
+  '.oooooo.',
+  '.oPPPPo.',
+  'ooLLLLoo',
+  'oPPPPPPo',
+  '.oLLLLo.',
+  'ooPPPPoo',
+  'oLLLLLLo',
+  'oPPPPPPo',
+];
+const SCENE_CUP = [
+  'oooo',
+  'owwo',
+  'oddo',
+  'owwo',
+];
+const SCENE_MONITOR = [
+  'oooooooooooo',
+  'otttttttttto',
+  'otllllllllto',
+  'otlwwwwlllto',
+  'otllllwwwlto',
+  'otlwwwllllto',
+  'otllwwwwwlto',
+  'otllllllllto',
+  'otttttttttto',
+  'oooooooooooo',
+];
+
+function buildTitleScene(blink) {
+  const g = Array.from({ length: SCENE_H }, () => Array(SCENE_W).fill('b'));
+  const fill = (x0, y0, w, h, ch) => {
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) g[y][x] = ch;
+  };
+  const stamp = (rows, x0, y0) => rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch !== '.') g[y0 + y][x0 + x] = ch;
+  }));
+
+  // 벽 · 걸레받이 · 바닥
+  fill(0, 17, SCENE_W, 3, 'c');
+  fill(0, 20, SCENE_W, 2, 'm');
+  fill(0, 22, SCENE_W, SCENE_H - 22, 'f');
+
+  // 벽시계 18:00 (콜론이 깜빡인다)
+  fill(3, 2, 23, 9, 'o');
+  fill(4, 3, 21, 7, 'K');
+  [['1', 6], ['8', 10], ['0', 16], ['0', 20]].forEach(([ch, x]) => {
+    PIXEL_FONT[ch].forEach((row, dy) => [...row].forEach((bit, dx) => {
+      if (bit === '1') g[4 + dy][x + dx] = 'R';
+    }));
+  });
+  if (blink) {
+    g[5][14] = 'R';
+    g[7][14] = 'R';
+  }
+
+  // 신입사원 (책상 위로 상반신만 보인다)
+  stamp(HERO_BODY.slice(0, 11), 16, 10);
+
+  // 모니터 + 받침
+  stamp(SCENE_MONITOR, 33, 9);
+  fill(38, 19, 2, 1, 't');
+  if (blink) fill(36, 16, 2, 1, 'w'); // 커서
+
+  // 책상: 상판 · 앞판
+  fill(0, 20, SCENE_W, 1, 'o');
+  fill(0, 21, SCENE_W, 2, 'd');
+  fill(0, 23, SCENE_W, 1, 'e');
+  fill(0, 24, SCENE_W, 1, 'o');
+  fill(3, 25, SCENE_W - 6, 5, 'e');
+  fill(2, 25, 1, 5, 'o');
+  fill(SCENE_W - 3, 25, 1, 5, 'o');
+  fill(2, 30, SCENE_W - 4, 1, 'o');
+
+  // 책상 위: 서류 더미 · 커피 · 키보드와 손 (타자 치듯 번갈아 움직인다)
+  stamp(SCENE_PAPERS, 3, 12);
+  stamp(SCENE_CUP, 12, 16);
+  fill(18, 21, 12, 1, 'K');
+  for (let x = 19; x < 29; x += 2) g[21][x] = 'L';
+  g[blink ? 20 : 21][19] = 's';
+  g[blink ? 21 : 20][28] = 's';
+
+  return g;
+}
+
+function renderScene(grid, cv) {
+  const c = cv.getContext('2d');
+  grid.forEach((row, y) => row.forEach((ch, x) => {
+    c.fillStyle = PALETTE[ch];
+    c.fillRect(x, y, 1, 1);
+  }));
+}
+
+const titleArt = document.getElementById('titleArt');
+titleArt.width = SCENE_W;
+titleArt.height = SCENE_H;
+const TITLE_FRAMES = [buildTitleScene(false), buildTitleScene(true)];
+let titleFrame = 0;
+renderScene(TITLE_FRAMES[0], titleArt);
+setInterval(() => {
+  if (state.screen !== 'title') return;
+  titleFrame = 1 - titleFrame;
+  renderScene(TITLE_FRAMES[titleFrame], titleArt);
+}, 500);
+
+// ?seed= 로 들어오면 첫 판만 그 시드로 시작한다
+let pendingSeed = Number(params.get('seed')) || null;
+
+function showTitle() {
+  state.screen = 'title';
+  clearTimeout(overlayTimer);
+  document.getElementById('overlay').className = '';
+  document.getElementById('msg').textContent = '';
+  const best = loadBest();
+  document.getElementById('titleBest').textContent = best === null ? ''
+    : '최고 기록: ' + (best === 0 ? '퇴근 성공' : best + 'F 까지');
+  document.getElementById('title').className = 'show';
+}
+
+function startGame() {
+  state.screen = 'play';
+  document.getElementById('title').className = '';
+  newRun(pendingSeed || randomSeed());
+  pendingSeed = null;
+}
+
+// 메뉴얼 — 적·아이템 데이터에서 만든다 (데이터를 고치면 메뉴얼도 따라온다)
+const AI_TAG = {
+  melee: '근접', ranged: '원거리', grab: '붙잡기', wander: '적 부르기 (공격 안 함)', boss: '보스',
+};
+
+function firstFloorOf(kind) {
+  for (let f = TOP_FLOOR; f >= 1; f--) {
+    if (ENEMIES_PER_FLOOR[f][kind]) return f;
+  }
+  return null;
+}
+
+function manualCard(sprite, name, tags, desc) {
+  const li = document.createElement('li');
+  const img = document.createElement('img');
+  img.src = sprite.toDataURL();
+  img.alt = '';
+  const body = document.createElement('div');
+  const head = document.createElement('div');
+  head.className = 'name';
+  const b = document.createElement('b');
+  b.textContent = name;
+  head.append(b);
+  tags.forEach(([text, cls]) => {
+    const t = document.createElement('span');
+    t.className = cls;
+    t.textContent = text;
+    head.append(t);
+  });
+  const p = document.createElement('div');
+  p.className = 'desc';
+  p.textContent = desc;
+  body.append(head, p);
+  li.append(img, body);
+  return li;
+}
+
+function buildManual() {
+  const enemies = document.getElementById('manualEnemies');
+  for (const [kind, t] of Object.entries(ENEMY_TYPES)) {
+    const where = kind === 'boss' ? '1F 출구' : firstFloorOf(kind) + 'F 부터';
+    enemies.append(manualCard(SPRITES[kind].right[0], t.name,
+      [[AI_TAG[t.ai], 'tag'], [where, 'tag where']], t.desc));
+  }
+  const items = document.getElementById('manualItems');
+  for (const [kind, t] of Object.entries(ITEM_TYPES)) {
+    items.append(manualCard(SPRITES[kind], t.name, [[t.tag, 'tag'], [t.key + ' 키', 'tag where']], t.desc));
+  }
+}
+
+function manualOpen() {
+  return document.getElementById('manual').className === 'show';
+}
+
+function openManual() {
+  document.getElementById('manual').className = 'show';
+  document.querySelector('#manual .panel').scrollTop = 0;
+}
+
+function closeManual() {
+  document.getElementById('manual').className = '';
+}
+
+buildManual();
+document.getElementById('startBtn').addEventListener('click', (e) => {
+  e.currentTarget.blur();
+  startGame();
+});
+document.getElementById('manualBtn').addEventListener('click', (e) => {
+  e.currentTarget.blur();
+  openManual();
+});
+document.getElementById('manualClose').addEventListener('click', closeManual);
+document.getElementById('manual').addEventListener('click', (e) => {
+  if (e.target.id === 'manual') closeManual(); // 바깥을 누르면 닫기
+});
+document.getElementById('restart').addEventListener('click', (e) => {
+  e.currentTarget.blur();
+  showTitle();
+});
+
+// 시작화면 뒤에도 그릴 맵이 있어야 해서 한 판을 미리 만들어 둔다 (퇴근하기에서 새로 시작)
+newRun(pendingSeed || randomSeed());
+showTitle();
 draw();
 </script>
 </body>
