@@ -44,6 +44,18 @@
   #hud { color: var(--muted); font-size: 14px; }
   #hud b { color: var(--accent); font-weight: normal; }
   #hud b.low { color: var(--danger); }
+  /* 시계: 21시까진 초록, 23시까진 노랑, 그 뒤 빨강. 00:00 이면 멈춰서 흔들린다 */
+  #hud #clock.ok { color: #7fd6a8; }
+  #hud #clock.late { color: var(--danger); }
+  #hud #clock.midnight { color: var(--danger); display: inline-block; animation: midnight 0.5s ease-in-out infinite; }
+  @keyframes midnight {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(-6deg); }
+    75% { transform: rotate(6deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #hud #clock.midnight { animation: none; }
+  }
   #stage {
     position: relative;
     width: 100%;
@@ -364,7 +376,7 @@
 <body>
 <header>
   <h1>회사에서 탈출하기</h1>
-  <div id="hud"><b id="floor">5F</b> · 멘탈 <b id="mental">20/20</b> · 턴 <b id="turn">0</b> · 적 <b id="enemiesLeft">0</b> · 아이템 <b id="itemsLeft">0</b><span id="status"></span></div>
+  <div id="hud"><b id="floor">5F</b> · 멘탈 <b id="mental">20/20</b> · <b id="clock">18:00</b> · 적 <b id="enemiesLeft">0</b> · 아이템 <b id="itemsLeft">0</b><span id="status"></span></div>
 </header>
 
 <div id="stage">
@@ -414,6 +426,7 @@
       <li><b>아이템</b> 밟으면 줍고, 1 / 2 / 3 키나 아래 버튼으로 사용 (쓰면 한 턴 지남)</li>
       <li><b>멘탈</b> 저절로 회복되지 않는다. 커피를 마시거나 정수기에 부딪혀 회복</li>
       <li><b>강화</b> 계단을 내려갈 때마다 두 장 중 하나를 고른다</li>
+      <li><b>시계</b> 5F 18:00 부터 시간이 흐른다. 오래 헤맬수록 늦게 퇴근하고, 00:00 이 되면 막차가 끊긴다</li>
     </ul>
     <h3>적</h3>
     <ul class="cards" id="manualEnemies"></ul>
@@ -1077,7 +1090,7 @@ const BOSS = {
   name: '야근 강요하는 사장님',
   short: '사장님', obj: '사장님을',
   ai: 'boss',
-  desc: '1층 로비 문을 막고 있다. 쓰러뜨려야 문이 열린다. 알아챈 뒤로 퇴근 시간이 밀리며 점점 세지고, "긴급 회의"로 동기를 불러온다. 평소엔 바빠서 한 턴씩 걸러 움직이지만 (머리 위 "!" = 다음 턴에 행동), 궁지에 몰리면 분노해서 매 턴 움직인다.',
+  desc: '1층 로비 문을 막고 있다. 쓰러뜨려야 문이 열린다. 알아챈 뒤로 시계를 빨리 돌리며 점점 세지고, "긴급 회의"로 동기를 불러온다. 평소엔 바빠서 한 턴씩 걸러 움직이지만 (머리 위 "!" = 다음 턴에 행동), 궁지에 몰리면 분노해서 매 턴 움직인다.',
   hp: 30,             // 볼펜·아이템이 늘어서 18 → 27, 강화가 생겨서 → 30 (2026-09-30)
   attack: 5,          // 대신 2턴에 한 번만 때린다 (분노하면 매 턴). 4 로 낮췄다가 쉽다는 평가로 원복 (2026-10)
   sight: 6,
@@ -1431,11 +1444,10 @@ function enterFloor(floorNo) {
   h.y = state.map.start.y;
   h.anim = { fromX: h.x, fromY: h.y, start: 0 };
   state.grab = null;
-  state.overtime = 0;
   state.popups = [];
   state.shots = [];
   say(floorNo === 1
-    ? '1F 로비. 그런데 사장님이 출구를 막고 있다! 퇴근 시간은 18:00.'
+    ? '1F 로비. 그런데 사장님이 출구를 막고 있다! 지금 ' + clockText() + '.'
     : floorNo + 'F. 모두 퇴근시키고 계단으로 내려가자.');
   updateHud();
 }
@@ -1505,6 +1517,8 @@ function newRun(seed = randomSeed()) {
   state.bag = { coffee: 0, annual: 0, half: 0 };
   state.annualTurns = 0;
   state.throwCd = 0;
+  state.overtime = 0;
+  state.clockTurns = 0;   // 사장님 없이 흐른 턴 (시계용)
   state.stats = { kills: 0, items: 0 };
   state.halfTurns = 0;
   state.over = false;
@@ -1545,7 +1559,7 @@ function bossAlive() {
 
 function clockText() {
   const m = 18 * 60 + state.overtime;
-  return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
+  return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 }
 
 // ─────────────────────────────────────────────
@@ -1701,7 +1715,7 @@ function endHeroAction() {
   }
 
   state.turn += 1;
-  if (state.floor === 1) overtimeTick();
+  clockTick();
 
   enemiesAct();
   if (state.annualTurns > 0) state.annualTurns -= 1;
@@ -1710,14 +1724,40 @@ function endHeroAction() {
   updateHud();
 }
 
+// 시계: 5층 18:00 부터. CLOCK.every 턴마다 30분, 00:00 이 되면 멈춘다 (판 전체로 이어진다)
+// 75턴 = 2026-10 플레이 기록(2층 중간 526턴)으로 맞춤. 한 판 ~750턴이면 23시쯤 퇴근
+const CLOCK = {
+  every: 75,
+  step: 30,
+  max: 6 * 60,        // 18:00 + 6시간 = 00:00
+};
+
+function clockTick() {
+  if (state.overtime >= CLOCK.max) return;
+  const boss = state.enemies.find((e) => e.type.ai === 'boss');
+  if (boss && boss.awake) {
+    overtimeTick(boss); // 사장님을 만나면 시계가 빨라진다
+    return;
+  }
+  state.clockTurns += 1;
+  if (state.clockTurns % CLOCK.every !== 0) return;
+  addOvertime('');
+}
+
+function addOvertime(note) {
+  state.overtime = Math.min(CLOCK.max, state.overtime + CLOCK.step);
+  if (state.overtime >= CLOCK.max) {
+    say('00:00. 막차가 끊겼다… 시계는 더 이상 보지 않기로 했다.' + note);
+  } else {
+    say('벌써 ' + clockText() + '.' + note);
+  }
+}
+
 // 1층: 사장님이 나를 알아챈 뒤부터 퇴근 시간이 밀리고, 밀릴수록 사장님이 세진다
 // (걸어가는 동안까지 세면 만나기 전에 이미 최대로 세져서 못 이긴다 — 2026-09-30 시뮬레이션)
-function overtimeTick() {
-  const boss = state.enemies.find((e) => e.type.ai === 'boss');
-  if (!boss || !boss.awake) return;
+function overtimeTick(boss) {
   boss.awakeTurns = (boss.awakeTurns || 0) + 1;
   if (boss.awakeTurns % BOSS.overtimeEvery !== 0) return;
-  state.overtime += 30;
   let note = '';
   if (state.stat.overtimeImmune) {
     note = ' (야근 면역: 사장님 공격력 그대로)';
@@ -1725,7 +1765,7 @@ function overtimeTick() {
     boss.bonus += 1;
     note = ' 사장님 공격력 +1';
   }
-  say('퇴근 시간이 ' + clockText() + ' 으로 밀렸다.' + note);
+  addOvertime(' 사장님이 퇴근 시간을 밀었다.' + note);
 }
 
 function pickUp() {
@@ -2019,20 +2059,16 @@ const SCORE = {
   perKill: 30,        // 퇴근시킨 적 (사장님이 불러온 동기 포함)
   perItem: 20,        // 주운 아이템
   perMental: 10,      // 남은 멘탈
-  perTurn: -1,        // 걸린 턴
-  perOvertime: -5,    // 야근 1분당 (30분 밀리면 -150)
+  perTurn: -1,        // 걸린 턴 (야근 시간은 턴에서 나오므로 따로 깎지 않는다)
 };
 
 function scoreLines() {
-  const o = state.overtime;
-  const lateText = o === 0 ? '없음' : (o >= 60 ? Math.floor(o / 60) + '시간' : '') + (o % 60 ? (o % 60) + '분' : '');
   return [
     ['퇴근 성공', SCORE.clear],
     ['퇴근시킨 적 ' + state.stats.kills + '명', state.stats.kills * SCORE.perKill],
     ['모은 아이템 ' + state.stats.items + '개', state.stats.items * SCORE.perItem],
     ['남은 멘탈 ' + state.mental, state.mental * SCORE.perMental],
     ['걸린 턴 ' + state.turn, state.turn * SCORE.perTurn],
-    ['야근 ' + lateText, o * SCORE.perOvertime],
   ];
 }
 
@@ -2126,7 +2162,10 @@ function say(text) {
 }
 
 function updateHud() {
-  document.getElementById('turn').textContent = state.turn;
+  const clock = document.getElementById('clock');
+  clock.textContent = clockText();
+  clock.className = state.overtime >= CLOCK.max ? 'midnight'
+    : state.overtime < 3 * 60 ? 'ok' : state.overtime < 5 * 60 ? '' : 'late';
   document.getElementById('enemiesLeft').textContent = state.enemies.length;
   document.getElementById('itemsLeft').textContent = state.items.length;
   const throwBtn = document.getElementById('throwBtn');
@@ -2149,9 +2188,6 @@ function updateHud() {
     btn.classList.toggle('hint', need && state.bag[kind] > 0);
   }
   const effects = [];
-  if (state.floor === 1) {
-    effects.push('<b' + (state.overtime > 0 ? ' class="bad"' : '') + '>퇴근 ' + clockText() + '</b>');
-  }
   if (state.grab) effects.push('<b class="bad">회식 ' + state.grab.turns + '턴</b>');
   if (state.annualTurns > 0) effects.push('<b>연차 ' + state.annualTurns + '턴</b>');
   if (state.halfTurns > 0) effects.push('<b>반차 ' + state.halfTurns + '턴</b>');
