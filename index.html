@@ -348,6 +348,7 @@
     font-family: inherit;
   }
   #pad button:active { background: #4a4458; }
+  #pad button { -webkit-touch-callout: none; } /* iOS 길게 누르기 메뉴 막기 */
   #pad .up    { grid-column: 2; grid-row: 1; }
   #pad .left  { grid-column: 1; grid-row: 2; }
   #pad .throw { grid-column: 2; grid-row: 2; font-size: 14px; }
@@ -409,7 +410,7 @@
     <ul class="howto">
       <li><b>이동</b> 방향키 / WASD (폰은 화면 아래 패드)</li>
       <li><b>공격</b> 적 쪽으로 이동하면 키보드로 공격</li>
-      <li><b>던지기</b> Space (폰은 패드 가운데) 로 볼펜 던지기. 가장 가까운 적(노란 꺾쇠)을 자동 조준, 던진 뒤 잠깐 다시 집어야 한다</li>
+      <li><b>던지기</b> Space (폰은 패드 가운데) 로 볼펜 던지기. 같은 줄(가로·세로)의 가장 가까운 적(노란 꺾쇠)을 자동 조준, 던진 뒤 잠깐 다시 집어야 한다</li>
       <li><b>아이템</b> 밟으면 줍고, 1 / 2 / 3 키나 아래 버튼으로 사용 (쓰면 한 턴 지남)</li>
       <li><b>멘탈</b> 저절로 회복되지 않는다. 커피를 마시거나 정수기에 부딪혀 회복</li>
       <li><b>강화</b> 계단을 내려갈 때마다 두 장 중 하나를 고른다</li>
@@ -968,7 +969,7 @@ const HERO = {
   attack: 3,          // 키보드
   coolerHeal: 3,      // 정수기 한 번 (층마다 새 맵이라 다시 채워진다)
   throwDamage: 2,     // 볼펜 던지기 (원거리). 키보드보다 약하다
-  throwRange: 7,      // 가장 가까운 적을 자동으로 조준. 벽·가구·다른 적에 가리면 못 던진다
+  throwRange: 7,      // 같은 줄(가로·세로)의 가장 가까운 적을 자동으로 조준. 벽·가구·다른 적에 가리면 못 던진다
   throwCooldown: 3,   // n턴에 한 번. 없으면 멀리서 계속 던져 동기가 닿기도 전에 쓰러진다
   // 아래는 강화로만 오른다
   healBonus: 0,       // 커피·정수기 회복량 추가
@@ -1078,7 +1079,7 @@ const BOSS = {
   ai: 'boss',
   desc: '1층 로비 문을 막고 있다. 쓰러뜨려야 문이 열린다. 알아챈 뒤로 퇴근 시간이 밀리며 점점 세지고, "긴급 회의"로 동기를 불러온다. 평소엔 바빠서 한 턴씩 걸러 움직이지만 (머리 위 "!" = 다음 턴에 행동), 궁지에 몰리면 분노해서 매 턴 움직인다.',
   hp: 30,             // 볼펜·아이템이 늘어서 18 → 27, 강화가 생겨서 → 30 (2026-09-30)
-  attack: 4,          // 대신 2턴에 한 번만 때린다 (분노하면 매 턴). 5 는 너무 셌다 (2026-10 플레이 피드백)
+  attack: 5,          // 대신 2턴에 한 번만 때린다 (분노하면 매 턴). 4 로 낮췄다가 쉽다는 평가로 원복 (2026-10)
   sight: 6,
   summonEvery: 5,     // n턴마다 동기를 옆에 불러온다 ("긴급 회의")
   maxSummons: 3,      // 불려 온 동기는 동시에 최대
@@ -1086,7 +1087,7 @@ const BOSS = {
   firstSummonDelay: 6,// 알아챈 뒤 첫 소집까지 기다리는 턴
   actEvery: 2,        // 바쁜 사장님: 2턴에 한 번 행동. 행동 직전 턴엔 머리 위 빨간 "!"
   overtimeEvery: 8,   // 알아챈 뒤 n턴마다 퇴근 시간 30분 밀림 + 공격력 +1
-  overtimeMaxBonus: 2,
+  overtimeMaxBonus: 3,
   lines: [
     '사장님: "요즘 애들은 끈기가 없어."',
     '사장님: "내일 아침까지 되지?"',
@@ -1614,7 +1615,8 @@ function act(dir) {
   endHeroAction();
 }
 
-// 볼펜 던지기 자동 조준: 사거리 안에서 가려지지 않은 가장 가까운 적.
+// 볼펜 던지기 자동 조준: 같은 가로줄·세로줄에서 가려지지 않은 가장 가까운 적.
+// 대각선은 안 된다 — 어디서든 맞히면 너무 쉬웠다 (2026-10 플레이 피드백)
 // 붙잡은 팀장님은 고르지 않는다 (때릴 수 없으니 다른 적을 노린다)
 function throwTarget() {
   const h = state.hero;
@@ -1622,8 +1624,9 @@ function throwTarget() {
   let bestD = Infinity;
   for (const e of state.enemies) {
     if (state.grab && state.grab.by === e) continue;
-    const d = Math.hypot(e.x - h.x, e.y - h.y);
-    if (d > state.stat.throwRange + 0.5 || d >= bestD || !clearShot(h, e)) continue;
+    if (e.x !== h.x && e.y !== h.y) continue; // 대각선 제외
+    const d = Math.abs(e.x - h.x) + Math.abs(e.y - h.y);
+    if (d > state.stat.throwRange || d >= bestD || !clearShot(h, e)) continue;
     best = e;
     bestD = d;
   }
@@ -1656,7 +1659,7 @@ function throwPen() {
   if (!target) {
     say(state.grab
       ? '팀장님 말고는 맞힐 사람이 없다… (연차·반차로 탈출)'
-      : state.stat.throwRange + '칸 안에 보이는 적이 없다.');
+      : state.stat.throwRange + '칸 안, 같은 줄에 보이는 적이 없다.');
     return;
   }
   if (target.x !== h.x) h.facing = target.x > h.x ? 1 : -1;
@@ -2428,7 +2431,62 @@ const ITEM_KEYS = {
   Digit3: 'half', Numpad3: 'half',
 };
 
+// 꾹 누르기: 누르면 한 칸, 계속 누르고 있으면 HOLD_DELAY 뒤부터 HOLD_EVERY 마다 한 칸씩.
+// 이어 걷는 칸에선 공격하지 않고, 위험하거나 볼 만한 게 생기면 멈춘다 (다시 눌러야 움직인다)
+const HOLD_DELAY = 300;
+const HOLD_EVERY = 140;
+const hold = { dir: null, timer: 0 };
+
+function startHold(dir) {
+  stopHold();
+  hold.dir = dir;
+  act(dir); // 첫 칸은 평소처럼 (적이 있으면 공격)
+  if (state.over || state.choosing) return;
+  hold.timer = setTimeout(holdStep, HOLD_DELAY);
+}
+
+function stopHold() {
+  clearTimeout(hold.timer);
+  hold.dir = null;
+}
+
+// 주인공 근처(화면 반 정도)에 있는 적
+function nearbyEnemies() {
+  const h = state.hero;
+  return new Set(state.enemies.filter((e) => Math.max(Math.abs(e.x - h.x), Math.abs(e.y - h.y)) <= 6));
+}
+
+function holdStep() {
+  if (!hold.dir || state.over || state.choosing || state.screen === 'title') return stopHold();
+  const h = state.hero;
+  const [dx, dy] = DIRS[hold.dir];
+  const next = tileAt(h.x + dx, h.y + dy);
+  // 앞에 적·계단·출구·정수기가 있으면 이어 걷지 않는다 (한 번 더 눌러서 정한다)
+  if (enemyAt(h.x + dx, h.y + dy) || next === '>' || next === 'E' || next === 'W') return stopHold();
+  const before = { x: h.x, y: h.y, mental: state.mental, items: state.stats.items, floor: state.floor, near: nearbyEnemies() };
+  act(hold.dir);
+  const moved = h.x !== before.x || h.y !== before.y;
+  const newEnemy = [...nearbyEnemies()].some((e) => !before.near.has(e));
+  const adjacent = state.enemies.some((e) => Math.abs(e.x - h.x) + Math.abs(e.y - h.y) === 1);
+  if (!moved || state.mental < before.mental || state.stats.items > before.items
+    || state.floor !== before.floor || newEnemy || adjacent || state.over || state.choosing) {
+    return stopHold();
+  }
+  hold.timer = setTimeout(holdStep, HOLD_EVERY);
+}
+
+window.addEventListener('keyup', (e) => {
+  if (KEYS[e.code] && KEYS[e.code] === hold.dir) stopHold();
+});
+window.addEventListener('blur', stopHold);
+
 window.addEventListener('keydown', (e) => {
+  // 키보드 자동 반복은 무시한다 — 꾹 누르기는 위의 타이머가 맡는다
+  // (자동 반복이 강화 카드 화면에 들어가 ←/→ 로 카드를 잘못 고르는 것도 막는다)
+  if (e.repeat) {
+    if (KEYS[e.code] || e.code === 'Space') e.preventDefault();
+    return;
+  }
   const ok = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
   if (manualOpen()) {
     if (ok || e.code === 'Escape') {
@@ -2473,7 +2531,7 @@ window.addEventListener('keydown', (e) => {
   const dir = KEYS[e.code];
   if (!dir) return;
   e.preventDefault();
-  act(dir);
+  startHold(dir);
 });
 
 document.querySelectorAll('#items button').forEach((btn) => {
@@ -2487,8 +2545,15 @@ document.querySelectorAll('#pad button').forEach((btn) => {
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     if (btn.id === 'throwBtn') throwPen();
-    else act(btn.dataset.dir);
+    else startHold(btn.dataset.dir);
   });
+  // 손가락을 떼거나, 버튼 밖으로 미끄러지거나, 터치가 끊기면 멈춘다
+  for (const type of ['pointerup', 'pointerleave', 'pointercancel']) {
+    btn.addEventListener(type, () => {
+      if (btn.dataset.dir === hold.dir) stopHold();
+    });
+  }
+  btn.addEventListener('contextmenu', (e) => e.preventDefault()); // 길게 누를 때 메뉴가 뜨지 않게
 });
 
 // ─────────────────────────────────────────────
