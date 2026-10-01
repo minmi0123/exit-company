@@ -348,6 +348,7 @@
     font-family: inherit;
   }
   #pad button:active { background: #4a4458; }
+  #pad button { -webkit-touch-callout: none; } /* iOS 길게 누르기 메뉴 막기 */
   #pad .up    { grid-column: 2; grid-row: 1; }
   #pad .left  { grid-column: 1; grid-row: 2; }
   #pad .throw { grid-column: 2; grid-row: 2; font-size: 14px; }
@@ -2430,7 +2431,62 @@ const ITEM_KEYS = {
   Digit3: 'half', Numpad3: 'half',
 };
 
+// 꾹 누르기: 누르면 한 칸, 계속 누르고 있으면 HOLD_DELAY 뒤부터 HOLD_EVERY 마다 한 칸씩.
+// 이어 걷는 칸에선 공격하지 않고, 위험하거나 볼 만한 게 생기면 멈춘다 (다시 눌러야 움직인다)
+const HOLD_DELAY = 300;
+const HOLD_EVERY = 140;
+const hold = { dir: null, timer: 0 };
+
+function startHold(dir) {
+  stopHold();
+  hold.dir = dir;
+  act(dir); // 첫 칸은 평소처럼 (적이 있으면 공격)
+  if (state.over || state.choosing) return;
+  hold.timer = setTimeout(holdStep, HOLD_DELAY);
+}
+
+function stopHold() {
+  clearTimeout(hold.timer);
+  hold.dir = null;
+}
+
+// 주인공 근처(화면 반 정도)에 있는 적
+function nearbyEnemies() {
+  const h = state.hero;
+  return new Set(state.enemies.filter((e) => Math.max(Math.abs(e.x - h.x), Math.abs(e.y - h.y)) <= 6));
+}
+
+function holdStep() {
+  if (!hold.dir || state.over || state.choosing || state.screen === 'title') return stopHold();
+  const h = state.hero;
+  const [dx, dy] = DIRS[hold.dir];
+  const next = tileAt(h.x + dx, h.y + dy);
+  // 앞에 적·계단·출구·정수기가 있으면 이어 걷지 않는다 (한 번 더 눌러서 정한다)
+  if (enemyAt(h.x + dx, h.y + dy) || next === '>' || next === 'E' || next === 'W') return stopHold();
+  const before = { x: h.x, y: h.y, mental: state.mental, items: state.stats.items, floor: state.floor, near: nearbyEnemies() };
+  act(hold.dir);
+  const moved = h.x !== before.x || h.y !== before.y;
+  const newEnemy = [...nearbyEnemies()].some((e) => !before.near.has(e));
+  const adjacent = state.enemies.some((e) => Math.abs(e.x - h.x) + Math.abs(e.y - h.y) === 1);
+  if (!moved || state.mental < before.mental || state.stats.items > before.items
+    || state.floor !== before.floor || newEnemy || adjacent || state.over || state.choosing) {
+    return stopHold();
+  }
+  hold.timer = setTimeout(holdStep, HOLD_EVERY);
+}
+
+window.addEventListener('keyup', (e) => {
+  if (KEYS[e.code] && KEYS[e.code] === hold.dir) stopHold();
+});
+window.addEventListener('blur', stopHold);
+
 window.addEventListener('keydown', (e) => {
+  // 키보드 자동 반복은 무시한다 — 꾹 누르기는 위의 타이머가 맡는다
+  // (자동 반복이 강화 카드 화면에 들어가 ←/→ 로 카드를 잘못 고르는 것도 막는다)
+  if (e.repeat) {
+    if (KEYS[e.code] || e.code === 'Space') e.preventDefault();
+    return;
+  }
   const ok = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
   if (manualOpen()) {
     if (ok || e.code === 'Escape') {
@@ -2475,7 +2531,7 @@ window.addEventListener('keydown', (e) => {
   const dir = KEYS[e.code];
   if (!dir) return;
   e.preventDefault();
-  act(dir);
+  startHold(dir);
 });
 
 document.querySelectorAll('#items button').forEach((btn) => {
@@ -2489,8 +2545,15 @@ document.querySelectorAll('#pad button').forEach((btn) => {
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     if (btn.id === 'throwBtn') throwPen();
-    else act(btn.dataset.dir);
+    else startHold(btn.dataset.dir);
   });
+  // 손가락을 떼거나, 버튼 밖으로 미끄러지거나, 터치가 끊기면 멈춘다
+  for (const type of ['pointerup', 'pointerleave', 'pointercancel']) {
+    btn.addEventListener(type, () => {
+      if (btn.dataset.dir === hold.dir) stopHold();
+    });
+  }
+  btn.addEventListener('contextmenu', (e) => e.preventDefault()); // 길게 누를 때 메뉴가 뜨지 않게
 });
 
 // ─────────────────────────────────────────────
