@@ -283,7 +283,7 @@ function startGame() {
   pendingSeed = null;
 }
 
-// 메뉴얼 — 적·아이템 데이터에서 만든다 (데이터를 고치면 메뉴얼도 따라온다)
+// 도감 카드 — 적·아이템 데이터에서 만든다 (데이터를 고치면 도감도 따라온다)
 const AI_TAG = {
   melee: '근접', ranged: '원거리', grab: '붙잡기', wander: '적 부르기 (공격 안 함)', boss: '보스',
 };
@@ -320,20 +320,54 @@ function manualCard(sprite, name, tags, desc) {
   return li;
 }
 
-function buildManual() {
-  const enemies = document.getElementById('manualEnemies');
-  for (const [kind, t] of Object.entries(ENEMY_TYPES)) {
-    const where = kind === 'boss' ? '1F 출구' : firstFloorOf(kind) + 'F 부터';
-    enemies.append(manualCard(SPRITES[kind].right[0], t.name,
-      [[AI_TAG[t.ai], 'tag'], [where, 'tag where']], t.desc));
-  }
-  const items = document.getElementById('manualItems');
-  for (const [kind, t] of Object.entries(ITEM_TYPES)) {
-    items.append(manualCard(SPRITES[kind], t.name, [[t.tag, 'tag'], [t.key + ' 키', 'tag where']], t.desc));
-  }
+// 아직 못 만난 칸: 그림을 검은 실루엣으로
+function silhouette(sprite) {
+  const c = document.createElement('canvas');
+  c.width = sprite.width;
+  c.height = sprite.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(sprite, 0, 0);
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = '#4a4458';
+  ctx.fillRect(0, 0, c.width, c.height);
+  return c;
 }
 
-// 창 (게임 방법 · 탄 고르기 · 환경설정): 한 번에 하나만 연다
+// 도감 — 열 때마다 기록을 읽어 새로 만든다
+function buildDex() {
+  const dex = loadDex();
+  const fill = (listId, countId, entries, group, verb) => {
+    const list = document.getElementById(listId);
+    list.innerHTML = '';
+    let seen = 0;
+    for (const [kind, sprite, name, tags, desc] of entries) {
+      const n = dex[group][kind] || 0;
+      if (n > 0) {
+        seen += 1;
+        const card = manualCard(sprite, name, tags, desc);
+        const count = document.createElement('span');
+        count.className = 'seen';
+        count.textContent = verb + ' ' + n + '번';
+        card.querySelector('.name').append(count);
+        list.append(card);
+      } else {
+        const card = manualCard(silhouette(sprite), '???', [], '아직 만나지 못했다.');
+        card.className = 'unknown';
+        list.append(card);
+      }
+    }
+    document.getElementById(countId).textContent = seen + ' / ' + entries.length;
+  };
+  fill('dexEnemies', 'dexEnemyCount', Object.entries(ENEMY_TYPES).map(([kind, t]) => [
+    kind, SPRITES[kind].right[0], t.name,
+    [[AI_TAG[t.ai], 'tag'], [kind === 'boss' ? '1F 출구' : firstFloorOf(kind) + 'F 부터', 'tag where']], t.desc,
+  ]), 'enemies', '퇴근시킴');
+  fill('dexItems', 'dexItemCount', Object.entries(ITEM_TYPES).map(([kind, t]) => [
+    kind, SPRITES[kind], t.name, [[t.tag, 'tag'], [t.key + ' 키', 'tag where']], t.desc,
+  ]), 'items', '먹음');
+}
+
+// 창 (게임 방법 · 도감 · 탄 고르기 · 환경설정): 한 번에 하나만 연다
 function openDialogId() {
   const open = document.querySelector('.dialog.show');
   return open ? open.id : null;
@@ -344,6 +378,7 @@ function openDialog(id) {
   const el = document.getElementById(id);
   el.classList.add('show');
   el.querySelector('.panel').scrollTop = 0;
+  if (id === 'dex') buildDex();
   if (id === 'stages') {
     const best = loadBest();
     document.getElementById('stage1Best').textContent = best === null ? ''
@@ -369,8 +404,7 @@ volumeInput.addEventListener('input', () => {
 volumeInput.addEventListener('change', () => sfx('item')); // 손을 떼면 들어 보기
 alarmInput.addEventListener('change', () => setAlarmEnabled(alarmInput.checked));
 
-buildManual();
-for (const [btn, id] of [['startBtn', 'stages'], ['manualBtn', 'manual'], ['settingsBtn', 'settings']]) {
+for (const [btn, id] of [['startBtn', 'stages'], ['manualBtn', 'manual'], ['dexBtn', 'dex'], ['settingsBtn', 'settings']]) {
   document.getElementById(btn).addEventListener('click', (e) => {
     e.currentTarget.blur();
     openDialog(id);

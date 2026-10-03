@@ -387,6 +387,7 @@ function pickUp() {
   state.items = state.items.filter((it) => it !== item);
   state.bag[item.kind] += 1;
   state.stats.items += 1;
+  recordDex('items', item.kind);
   sfx('item');
   const type = ITEM_TYPES[item.kind];
   say(type.name + '를 주웠다. (' + type.key + '번으로 사용)');
@@ -448,6 +449,7 @@ function heroAttack(e, dmg = state.stat.attack, weapon = '키보드') {
 function removeEnemy(e) {
   state.enemies = state.enemies.filter((o) => o !== e);
   state.stats.kills += 1;
+  recordDex('enemies', e.kind);
   if (state.grab && state.grab.by === e) state.grab = null;
   if (e.type.ai === 'boss') {
     say('사장님을 먼저 퇴근시켰다!');
@@ -670,6 +672,28 @@ function hurtHero(e, dmg, line) {
 //    기록: 0 = 퇴근 성공, 1~5 = 도달한 가장 낮은 층
 // ─────────────────────────────────────────────
 const BEST_KEY = 'exit-company.best';
+
+// 도감: 퇴근시킨 적 · 먹은 아이템 수. 판이 끝나도 남는다 { enemies: { donggi: 12 }, items: { coffee: 30 } }
+const DEX_KEY = 'exit-company.dex';
+
+function loadDex() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DEX_KEY)) || {};
+    return { enemies: d.enemies || {}, items: d.items || {} };
+  } catch (e) {
+    return { enemies: {}, items: {} };
+  }
+}
+
+function recordDex(group, kind) {
+  const dex = loadDex();
+  dex[group][kind] = (dex[group][kind] || 0) + 1;
+  try {
+    localStorage.setItem(DEX_KEY, JSON.stringify(dex));
+  } catch (e) {
+    // 저장이 막힌 환경에서는 기록만 못 남긴다
+  }
+}
 const BEST_SCORE_KEY = 'exit-company.bestScore';
 
 // 최종 점수 (퇴근 성공했을 때만). 빨리·많이·덜 야근할수록 높다

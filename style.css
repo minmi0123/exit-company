@@ -191,7 +191,7 @@ h1 { font-size: 18px; margin: 0; }
 }
 #title p { margin: 0; font-size: 14px; }
 #titleBest { color: var(--muted); font-size: 12px !important; min-height: 1em; }
-#title .buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+#title .buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 4px; width: min(100%, 320px); }
 #title button {
   padding: 10px 16px;
   font-size: 16px;
@@ -302,6 +302,16 @@ h1 { font-size: 18px; margin: 0; }
 .dialog .setting input[type=range] { flex: 1; accent-color: var(--accent); }
 .dialog .setting input[type=checkbox] { flex: none; width: 20px; height: 20px; accent-color: var(--accent); }
 .dialog .setting output { width: 3em; text-align: right; color: var(--muted); }
+/* 게임 방법 */
+.dialog .rules { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.dialog .rules li { padding-left: 1em; text-indent: -1em; }
+.dialog .rules li::before { content: '· '; color: var(--accent); }
+.dialog .rules b { color: var(--accent); font-weight: normal; }
+/* 도감 */
+.dialog h3 .count { color: var(--muted); font-size: 13px; }
+.dialog .cards li.unknown { display: flex; gap: 10px; align-items: flex-start; padding: 8px; background: var(--bg); border-radius: 8px; }
+.dialog .cards li.unknown .name b { color: var(--muted); }
+.dialog .cards .seen { color: #7fd6a8; font-size: 12px; }
 .dialog .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
 #msg {
   margin: 0;
