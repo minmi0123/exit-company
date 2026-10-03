@@ -987,7 +987,7 @@ const HERO = {
   // 아래는 강화로만 오른다
   healBonus: 0,       // 커피·정수기 회복량 추가
   guard: 0,           // 받는 피해 감소 (최소 1은 받는다)
-  dashChance: 0,      // 이동할 때 두 칸 갈 확률
+  clockSlow: 0,       // 시계가 30분 가는 데 더 걸리는 턴
   floorItems: 0,      // 층 시작할 때 받는 아이템 수
   grabResist: 0,      // 팀장님 붙잡기 턴 감소 (최소 1턴)
   overtimeImmune: false, // 사장님이 퇴근 시간을 밀어도 공격력이 안 오름
@@ -1008,8 +1008,8 @@ const PERKS = [
     apply: (s) => { s.healBonus += 2; } },
   { id: 'headphone', name: '노이즈캔슬링', desc: '받는 피해 -1 (최소 1)',
     apply: (s) => { s.guard += 1; }, available: (s) => s.guard < 2 },
-  { id: 'dash', name: '칼퇴 본능', desc: '이동할 때 25% 확률로 두 칸',
-    apply: (s) => { s.dashChance += 0.25; }, available: (s) => s.dashChance < 0.75 },
+  { id: 'clock', name: '칼퇴 본능', desc: '시계가 느리게 간다 (30분에 25턴 더)',
+    apply: (s) => { s.clockSlow += 25; }, available: (s) => s.clockSlow < 50 },
   { id: 'network', name: '사내 인맥', desc: '층 시작마다 무작위 아이템 1개',
     apply: (s) => { s.floorItems += 1; } },
   { id: 'refuse', name: '거절의 기술', desc: '팀장님 회식 붙잡기 1턴 줄임',
@@ -1129,8 +1129,8 @@ const ITEM_TYPES = {
     tag: '회복', desc: '멘탈을 회복한다. 가장 자주 나온다.' },
   annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.7, turns: 5,  // 무적. 강해서 한 층에 하나까지
     tag: '무적 · 탈출', desc: '잠시 무적이 된다. 팀장님에게 붙잡혔을 때 쓰면 빠져나온다.' },
-  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 5,  // 이동 한 번에 두 칸
-    tag: '가속 · 탈출', desc: '잠시 이동 한 번에 두 칸씩 간다. 팀장님에게 붙잡혔을 때 쓰면 빠져나온다.' },
+  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 5, power: 1.5, // 공격력 1.5배 (올림)
+    tag: '공격 · 탈출', desc: '오전에 몰아서 끝낸다. 잠시 공격력이 1.5배가 된다. 팀장님에게 붙잡혔을 때 쓰면 빠져나온다.' },
 };
 
 // ─────────────────────────────────────────────
@@ -1419,7 +1419,7 @@ const state = {
   items: [],          // 바닥에 떨어진 아이템
   bag: { coffee: 0, annual: 0, half: 0 },
   annualTurns: 0,     // 연차: 남은 무적 턴
-  halfTurns: 0,       // 반차: 남은 빠른 턴
+  halfTurns: 0,       // 반차: 공격력이 오른 남은 턴
   grab: null,         // 팀장님에게 붙잡힘 { by: 팀장님, turns: 남은 턴 }
   overtime: 0,        // 퇴근 시간이 밀린 분 (18:00 + overtime)
   over: false,        // 퇴근 성공 또는 멘탈 붕괴
@@ -1622,7 +1622,6 @@ function act(dir) {
     } else {
       moveUnit(h, nx, ny);
       pickUp();
-      if (state.halfTurns > 0 || state.rng() < state.stat.dashChance) dashStep(dx, dy);
     }
   }
 
@@ -1683,24 +1682,6 @@ function throwPen() {
   endHeroAction();
 }
 
-// 반차: 이동하면 같은 방향으로 한 칸 더 (한 턴에 두 칸).
-// 계단/출구에 섰거나, 다음 칸이 막혔거나 적이 있으면 한 칸에서 멈춘다 (자동 공격은 하지 않는다)
-function dashStep(dx, dy) {
-  const h = state.hero;
-  const here = tileAt(h.x, h.y);
-  if (here === '>' || here === 'E') return;
-  const nx = h.x + dx;
-  const ny = h.y + dy;
-  const t = tileAt(nx, ny);
-  if (BLOCKING.has(t) || enemyAt(nx, ny) || lockedMessage(t)) return;
-  const from = { fromX: h.anim.fromX, fromY: h.anim.fromY };
-  moveUnit(h, nx, ny);
-  h.anim.fromX = from.fromX; // 두 칸을 한 번에 미끄러지듯 이동
-  h.anim.fromY = from.fromY;
-  h.step ^= 1;               // 두 번 바뀌면 제자리 → 한 번만 바뀐 것처럼
-  pickUp();
-}
-
 // 주인공 행동 뒤 공통 처리: 계단/출구 → 턴 경과 → 적 행동
 function endHeroAction() {
   const h = state.hero;
@@ -1740,7 +1721,7 @@ function clockTick() {
     return;
   }
   state.clockTurns += 1;
-  if (state.clockTurns % CLOCK.every !== 0) return;
+  if (state.clockTurns % (CLOCK.every + state.stat.clockSlow) !== 0) return;
   addOvertime('');
 }
 
@@ -1799,7 +1780,7 @@ function useItem(kind) {
     say('연차를 냈다! ' + type.turns + '턴 동안 아무도 나를 건드릴 수 없다.');
   } else if (kind === 'half') {
     state.halfTurns = type.turns;
-    say('반차를 냈다! ' + type.turns + '턴 동안 한 번에 두 칸씩 움직인다.');
+    say('반차를 냈다! 오전에 몰아서 끝낸다 — ' + type.turns + '턴 동안 공격력 ' + type.power + '배.');
   }
   // 연차·반차 = 회식 탈출
   if (kind !== 'coffee' && state.grab) {
@@ -1811,8 +1792,11 @@ function useItem(kind) {
 }
 
 function heroAttack(e, dmg = state.stat.attack, weapon = '키보드') {
+  // 반차 중: 공격력 1.5배 (올림 — 내림이면 3 → 4 라 세진 게 잘 안 느껴진다)
+  const boosted = state.halfTurns > 0;
+  if (boosted) dmg = Math.ceil(dmg * ITEM_TYPES.half.power);
   e.hp -= dmg;
-  popup(e.x, e.y, '-' + dmg, '#ffe27a');
+  popup(e.x, e.y, '-' + dmg, boosted ? '#ff9f43' : '#ffe27a');
   if (e.hp <= 0) {
     removeEnemy(e);
     return;
