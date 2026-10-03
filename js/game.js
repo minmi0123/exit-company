@@ -95,6 +95,7 @@ function clearBonus() {
   const p = pool[Math.floor(state.rng() * pool.length)];
   applyPerk(p);
   state.shake = 4;
+  sfx('perk');
   say('모두 퇴근시켰다! 보너스 강화: ' + p.name + ' — ' + p.desc);
 }
 
@@ -103,6 +104,8 @@ function choosePerk(p) {
   state.choosing = false;
   document.getElementById('perk').className = '';
   applyPerk(p);
+  sfx('perk');
+  sfx('stairs', 0.35); // 강화음이 끝날 즈음 계단을 내려간다
   enterFloor(state.floor - 1);
   say('강화: ' + p.name + ' — ' + p.desc);
   giveFloorItems();
@@ -220,6 +223,7 @@ function act(dir) {
       state.shake = 4;
       say('팀장님한테 손을 댈 순 없다… (연차·반차로 탈출)');
     } else if (target) {
+      sfx('attack');
       heroAttack(target);
     } else if (tileAt(nx, ny) === 'W') {
       // 정수기: 부딪히면 한 번 마신다 (턴을 쓴다). 멘탈이 꽉 차 있으면 아껴 둔다
@@ -231,6 +235,7 @@ function act(dir) {
       state.map.grid[ny][nx] = 'V';
       const heal = state.stat.coolerHeal + state.stat.healBonus;
       state.mental = Math.min(state.stat.maxMental, state.mental + heal);
+      sfx('drink');
       say('정수기 물을 마셨다. 멘탈 +' + heal);
     } else if (BLOCKING.has(tileAt(nx, ny))) {
       state.shake = 6; // 막힘: 턴을 소모하지 않는다
@@ -245,6 +250,7 @@ function act(dir) {
       say('팀장님이 놓아주지 않는다… (연차·반차로 탈출)');
     } else {
       moveUnit(h, nx, ny);
+      sfx('step', h.step);
       pickUp();
     }
   }
@@ -302,6 +308,7 @@ function throwPen() {
   if (target.x !== h.x) h.facing = target.x > h.x ? 1 : -1;
   state.shots.push({ fromX: h.x, fromY: h.y, toX: target.x, toY: target.y, start: performance.now(), pen: true });
   state.throwCd = state.stat.throwCooldown;
+  sfx('throw');
   heroAttack(target, state.stat.throwDamage, '볼펜');
   endHeroAction();
 }
@@ -380,6 +387,7 @@ function pickUp() {
   state.items = state.items.filter((it) => it !== item);
   state.bag[item.kind] += 1;
   state.stats.items += 1;
+  sfx('item');
   const type = ITEM_TYPES[item.kind];
   say(type.name + '를 주웠다. (' + type.key + '번으로 사용)');
 }
@@ -651,7 +659,9 @@ function hurtHero(e, dmg, line) {
   say(line + ' 멘탈 -' + dmg);
   if (state.mental <= 0) {
     state.mental = 0;
-    finish(false);
+    finish(false); // 죽는 소리는 finish 가 낸다
+  } else {
+    sfx('hurt');
   }
 }
 
@@ -737,6 +747,7 @@ let overlayTimer = 0; // 결과 화면을 늦게 띄우는 타이머 (그 사이
 
 function finish(cleared) {
   state.over = true;
+  if (!cleared) sfx('death');
   updateHud();
   const best = saveBest(cleared ? 0 : state.floor);
   const overlay = document.getElementById('overlay');
@@ -786,6 +797,7 @@ function updateHud() {
   const low = state.mental <= HERO.lowMental && !state.over;
   m.className = state.mental <= HERO.lowMental ? 'low' : '';
   document.getElementById('stage').classList.toggle('danger', low);
+  setAlarm(low && state.screen === 'play');
 
   for (const kind of Object.keys(ITEM_TYPES)) {
     document.getElementById('n-' + kind).textContent = state.bag[kind];
