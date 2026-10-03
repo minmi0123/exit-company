@@ -417,7 +417,7 @@
       <button id="manualClose">닫기</button>
     </div>
     <h3>목표</h3>
-    <p>5F 부터 한 층씩 내려가 1F 로비 문으로 퇴근한다. 층마다 적을 모두 퇴근시켜야 계단이 열린다. 멘탈이 바닥나면 처음부터 다시 출근.</p>
+    <p>5F 부터 한 층씩 내려가 1F 로비 문으로 퇴근한다. 계단은 언제든 내려갈 수 있지만, 그 층 적을 모두 퇴근시키면 강화를 하나 더 받는다. 1F 로비 문은 적을 모두 퇴근시켜야 열린다. 멘탈이 바닥나면 처음부터 다시 출근.</p>
     <h3>조작</h3>
     <ul class="howto">
       <li><b>이동</b> 방향키 / WASD (폰은 화면 아래 패드)</li>
@@ -1448,14 +1448,14 @@ function enterFloor(floorNo) {
   state.shots = [];
   say(floorNo === 1
     ? '1F 로비. 그런데 사장님이 출구를 막고 있다! 지금 ' + clockText() + '.'
-    : floorNo + 'F. 모두 퇴근시키고 계단으로 내려가자.');
+    : floorNo + 'F. 계단으로 내려가자. 모두 퇴근시키면 강화 보너스!');
   updateHud();
 }
 
 // 계단: 강화 두 장을 보여 주고, 고르면 다음 층으로
 function offerPerks() {
   state.choosing = true;
-  const pool = PERKS.filter((p) => !p.available || p.available(state.stat));
+  const pool = perkPool();
   const picks = [];
   while (picks.length < 2 && pool.length) {
     picks.push(pool.splice(Math.floor(state.rng() * pool.length), 1)[0]);
@@ -1473,13 +1473,32 @@ function offerPerks() {
   updateHud();
 }
 
+// 강화 후보 (더 받아도 소용없는 건 뺀다)
+function perkPool() {
+  return PERKS.filter((p) => !p.available || p.available(state.stat));
+}
+
+function applyPerk(p) {
+  p.apply(state.stat);
+  state.mental = Math.min(state.stat.maxMental, state.mental);
+  state.perks.push(p.name);
+}
+
+// 층의 마지막 적을 퇴근시키면 무작위 강화 하나 (1층은 로비 문이 열리는 걸로 대신한다)
+function clearBonus() {
+  const pool = perkPool();
+  if (!pool.length) return;
+  const p = pool[Math.floor(state.rng() * pool.length)];
+  applyPerk(p);
+  state.shake = 4;
+  say('모두 퇴근시켰다! 보너스 강화: ' + p.name + ' — ' + p.desc);
+}
+
 function choosePerk(p) {
   if (!state.choosing) return;
   state.choosing = false;
   document.getElementById('perk').className = '';
-  p.apply(state.stat);
-  state.mental = Math.min(state.stat.maxMental, state.mental);
-  state.perks.push(p.name);
+  applyPerk(p);
   enterFloor(state.floor - 1);
   say('강화: ' + p.name + ' — ' + p.desc);
   giveFloorItems();
@@ -1544,13 +1563,14 @@ function occupied(x, y) {
     || (state.hero.x === x && state.hero.y === y);
 }
 
-// 계단/출구는 그 층의 적을 모두 퇴근시켜야 열린다. 열려 있으면 null
+// 1층 로비 문은 그 층의 적을 모두 퇴근시켜야 열린다. 열려 있으면 null
+// 계단은 언제나 열려 있다 — 대신 그 층 적을 다 퇴근시키면 강화 보너스 (2026-10)
 function lockedMessage(t) {
-  if (t !== '>' && t !== 'E') return null;
+  if (t !== 'E') return null;
   if (bossAlive()) return '로비 문이 잠겨 있다. 사장님: "퇴근? 누가?"';
   const n = state.enemies.length;
   if (n === 0) return null;
-  return (t === 'E' ? '로비 문' : '계단') + '이 잠겨 있다. 남은 적 ' + n + '명을 먼저 퇴근시키자.';
+  return '로비 문이 잠겨 있다. 남은 적 ' + n + '명을 먼저 퇴근시키자.';
 }
 
 function bossAlive() {
@@ -1827,7 +1847,8 @@ function removeEnemy(e) {
     say(e.type.obj + ' 먼저 퇴근시켰다.');
   }
   if (state.enemies.length === 0) {
-    say(state.floor === 1 ? '모두 퇴근했다. 로비 문이 열렸다!' : '모두 퇴근했다. 계단이 열렸다!');
+    if (state.floor === 1) say('모두 퇴근했다. 로비 문이 열렸다!');
+    else clearBonus();
   }
 }
 
