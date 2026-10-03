@@ -38,16 +38,51 @@
     <p id="titleBest"></p>
     <div class="buttons">
       <button id="startBtn">퇴근하기</button>
-      <button id="manualBtn" class="sub">메뉴얼</button>
+      <button id="manualBtn" class="sub">게임 방법</button>
+      <button id="settingsBtn" class="sub">환경설정</button>
     </div>
   </div>
 </div>
 
-<div id="manual" role="dialog" aria-modal="true" aria-labelledby="manualTitle">
+<div id="stages" class="dialog" role="dialog" aria-modal="true" aria-labelledby="stagesTitle">
   <div class="panel">
     <div class="bar">
-      <h2 id="manualTitle">신입사원 메뉴얼</h2>
-      <button id="manualClose">닫기</button>
+      <h2 id="stagesTitle">어디서 탈출할까?</h2>
+      <button class="close">닫기</button>
+    </div>
+    <div class="stages">
+      <button id="stage1"><b>1탄 · 회사</b><span>5F 부터 1F 로비까지 내려가 퇴근한다</span><span id="stage1Best"></span></button>
+      <button disabled><b>2탄 · 집</b><span>넷플릭스 · 배달 · 숏폼 · 술… 쉬지 못하게 붙잡는 유혹들 (준비 중)</span></button>
+      <button disabled><b>3탄 · 회식</b><span>준비 중</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="settings" class="dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+  <div class="panel">
+    <div class="bar">
+      <h2 id="settingsTitle">환경설정</h2>
+      <button class="close">닫기</button>
+    </div>
+    <div class="setting">
+      <label for="volume">효과음</label>
+      <input id="volume" type="range" min="0" max="100" step="5">
+      <output id="volumeOut" for="volume"></output>
+    </div>
+    <div class="setting">
+      <label for="alarmOn">멘탈 경보</label>
+      <input id="alarmOn" type="checkbox">
+      <span class="note" style="margin: 0">멘탈이 낮을 때 울리는 위잉위잉 소리</span>
+    </div>
+    <p class="note">설정은 이 기기에 저장된다.</p>
+  </div>
+</div>
+
+<div id="manual" class="dialog" role="dialog" aria-modal="true" aria-labelledby="manualTitle">
+  <div class="panel">
+    <div class="bar">
+      <h2 id="manualTitle">게임 방법</h2>
+      <button class="close">닫기</button>
     </div>
     <h3>목표</h3>
     <p>5F 부터 한 층씩 내려가 1F 로비 문으로 퇴근한다. 계단은 언제든 내려갈 수 있지만, 그 층 적을 모두 퇴근시키면 강화를 하나 더 받는다. 1F 로비 문은 적을 모두 퇴근시켜야 열린다. 멘탈이 바닥나면 처음부터 다시 출근.</p>

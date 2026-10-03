@@ -191,9 +191,9 @@ h1 { font-size: 18px; margin: 0; }
 }
 #title p { margin: 0; font-size: 14px; }
 #titleBest { color: var(--muted); font-size: 12px !important; min-height: 1em; }
-#title .buttons { display: flex; gap: 8px; margin-top: 4px; }
+#title .buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
 #title button {
-  padding: 10px 20px;
+  padding: 10px 16px;
   font-size: 16px;
   font-family: inherit;
   background: var(--accent);
@@ -203,8 +203,8 @@ h1 { font-size: 18px; margin: 0; }
   cursor: pointer;
 }
 #title button.sub { background: var(--panel); color: var(--text); }
-/* 메뉴얼 — 폰에서도 읽기 편하게 화면 전체를 덮는다 */
-#manual {
+/* 창 (게임 방법 · 탄 고르기 · 환경설정) — 폰에서도 읽기 편하게 화면 전체를 덮는다 */
+.dialog {
   position: fixed;
   inset: 0;
   display: none;
@@ -214,8 +214,8 @@ h1 { font-size: 18px; margin: 0; }
   background: rgba(20, 18, 26, 0.9);
   z-index: 10;
 }
-#manual.show { display: flex; }
-#manual .panel {
+.dialog.show { display: flex; }
+.dialog .panel {
   width: 100%;
   max-width: 560px;
   max-height: 100%;
@@ -226,7 +226,7 @@ h1 { font-size: 18px; margin: 0; }
   font-size: 14px;
   line-height: 1.5;
 }
-#manual .bar {
+.dialog .bar {
   position: sticky;
   top: 0;
   display: flex;
@@ -235,10 +235,10 @@ h1 { font-size: 18px; margin: 0; }
   padding: 12px 0 8px;
   background: var(--panel);
 }
-#manual h2 { margin: 0; font-size: 18px; color: var(--accent); }
-#manual h3 { margin: 14px 0 6px; font-size: 15px; color: var(--accent); }
-#manual p { margin: 0; }
-#manual button {
+.dialog h2 { margin: 0; font-size: 18px; color: var(--accent); }
+.dialog h3 { margin: 14px 0 6px; font-size: 15px; color: var(--accent); }
+.dialog p { margin: 0; }
+.dialog button {
   padding: 6px 14px;
   font-size: 14px;
   font-family: inherit;
@@ -248,11 +248,11 @@ h1 { font-size: 18px; margin: 0; }
   border-radius: 6px;
   cursor: pointer;
 }
-#manual ul { margin: 0; padding: 0; list-style: none; }
-#manual .howto li { display: grid; grid-template-columns: 4.5em 1fr; }
-#manual .howto li b { color: var(--muted); font-weight: normal; }
-#manual .cards { display: flex; flex-direction: column; gap: 8px; }
-#manual .cards li {
+.dialog ul { margin: 0; padding: 0; list-style: none; }
+.dialog .howto li { display: grid; grid-template-columns: 4.5em 1fr; }
+.dialog .howto li b { color: var(--muted); font-weight: normal; }
+.dialog .cards { display: flex; flex-direction: column; gap: 8px; }
+.dialog .cards li {
   display: flex;
   gap: 10px;
   align-items: flex-start;
@@ -260,24 +260,49 @@ h1 { font-size: 18px; margin: 0; }
   background: var(--bg);
   border-radius: 8px;
 }
-#manual .cards img {
+.dialog .cards img {
   flex: none;
   width: 48px;
   height: 48px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
-#manual .cards .name { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
-#manual .cards .name b { font-weight: normal; }
-#manual .tag {
+.dialog .cards .name { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.dialog .cards .name b { font-weight: normal; }
+.dialog .tag {
   font-size: 12px;
   padding: 0 6px;
   border-radius: 4px;
   background: #4a4458;
   color: var(--accent);
 }
-#manual .tag.where { color: var(--muted); background: transparent; padding: 0; }
-#manual .cards .desc { color: var(--muted); }
+.dialog .tag.where { color: var(--muted); background: transparent; padding: 0; }
+.dialog .cards .desc { color: var(--muted); }
+/* 탄 고르기 */
+.dialog .stages { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.dialog .stages button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  border: 2px solid #4a4458;
+  line-height: 1.4;
+}
+.dialog .stages button:not(:disabled):hover,
+.dialog .stages button:not(:disabled):focus-visible { border-color: var(--accent); }
+.dialog .stages button:disabled { cursor: default; opacity: 0.55; }
+.dialog .stages b { font-size: 16px; color: var(--accent); font-weight: normal; }
+.dialog .stages span { color: var(--muted); font-size: 13px; }
+/* 환경설정 */
+.dialog .setting { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #3a3544; }
+.dialog .setting label { flex: none; width: 6em; }
+.dialog .setting input[type=range] { flex: 1; accent-color: var(--accent); }
+.dialog .setting input[type=checkbox] { flex: none; width: 20px; height: 20px; accent-color: var(--accent); }
+.dialog .setting output { width: 3em; text-align: right; color: var(--muted); }
+.dialog .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
 #msg {
   margin: 0;
   min-height: 1.4em;
