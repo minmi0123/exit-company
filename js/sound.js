@@ -5,7 +5,40 @@
 // ─────────────────────────────────────────────
 // 효과음 — sfx('step') 처럼 이름으로 부른다
 // ─────────────────────────────────────────────
-const SFX_VOLUME = 0.25;
+const SFX_VOLUME = 0.35; // 환경설정 볼륨 100 일 때 (기본 70 = 0.245 — 처음 정한 0.25 와 거의 같다)
+
+// 환경설정 — 이 기기의 localStorage 에 저장한다
+const SETTINGS_KEY = 'exit-company.settings';
+const settings = { volume: 70, alarm: true };
+try {
+  Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {});
+} catch (e) {
+  // 저장이 막힌 환경에서는 기본값으로
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    // 저장만 못 한다
+  }
+}
+
+function sfxGain() {
+  return SFX_VOLUME * settings.volume / 100;
+}
+
+function setVolume(v) {
+  settings.volume = v;
+  if (sfxOut) sfxOut.gain.value = sfxGain();
+  saveSettings();
+}
+
+function setAlarmEnabled(on) {
+  settings.alarm = on;
+  if (!on) setAlarm(false);
+  saveSettings();
+}
 
 let audioCtx = null;
 let sfxOut = null;
@@ -17,7 +50,7 @@ function audio() {
     if (!Ctx) return null;
     audioCtx = new Ctx();
     sfxOut = audioCtx.createGain();
-    sfxOut.gain.value = SFX_VOLUME;
+    sfxOut.gain.value = sfxGain();
     sfxOut.connect(audioCtx.destination);
   }
   if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -103,6 +136,7 @@ const ALARM = { volume: 0.12, low: 520, high: 780, speed: 1.6 }; // speed = 초�
 let alarm = null;
 
 function setAlarm(on) {
+  if (on && (!settings.alarm || settings.volume === 0)) on = false;
   if (on === !!alarm) return;
   try {
     if (on) {
@@ -140,6 +174,7 @@ function setAlarm(on) {
 }
 
 function sfx(name, ...args) {
+  if (settings.volume === 0) return;
   try {
     if (!audio()) return;
     SFX[name](...args);

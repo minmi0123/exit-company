@@ -74,19 +74,26 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const ok = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
-  if (manualOpen()) {
-    if (ok || e.code === 'Escape') {
+  const dialog = openDialogId();
+  if (dialog) {
+    if (e.code === 'Escape') {
       e.preventDefault();
-      closeManual();
+      closeDialog();
+    } else if (dialog === 'manual' && ok) {
+      e.preventDefault();
+      closeDialog();
+    } else if (dialog === 'stages' && (ok || e.code === 'Digit1' || e.code === 'Numpad1')) {
+      e.preventDefault();
+      startGame();
     }
-    return;
+    return; // 환경설정 창에선 키보드로 슬라이더·체크박스를 다룰 수 있게 둔다
   }
   if (state.screen === 'title') {
     if (ok) {
       e.preventDefault();
-      startGame();
+      openDialog('stages');
     } else if (e.code === 'KeyM') {
-      openManual();
+      openDialog('manual');
     }
     return;
   }
@@ -269,6 +276,7 @@ function showTitle() {
 }
 
 function startGame() {
+  closeDialog();
   state.screen = 'play';
   document.getElementById('title').className = '';
   newRun(pendingSeed || randomSeed());
@@ -325,31 +333,58 @@ function buildManual() {
   }
 }
 
-function manualOpen() {
-  return document.getElementById('manual').className === 'show';
+// 창 (게임 방법 · 탄 고르기 · 환경설정): 한 번에 하나만 연다
+function openDialogId() {
+  const open = document.querySelector('.dialog.show');
+  return open ? open.id : null;
 }
 
-function openManual() {
-  document.getElementById('manual').className = 'show';
-  document.querySelector('#manual .panel').scrollTop = 0;
+function openDialog(id) {
+  closeDialog();
+  const el = document.getElementById(id);
+  el.classList.add('show');
+  el.querySelector('.panel').scrollTop = 0;
+  if (id === 'stages') {
+    const best = loadBest();
+    document.getElementById('stage1Best').textContent = best === null ? ''
+      : '최고 기록: ' + (best === 0 ? '퇴근 성공' : best + 'F 까지');
+  }
 }
 
-function closeManual() {
-  document.getElementById('manual').className = '';
+function closeDialog() {
+  document.querySelectorAll('.dialog.show').forEach((el) => el.classList.remove('show'));
 }
+
+// 환경설정 — 값은 sound.js 의 settings 에 있다
+const volumeInput = document.getElementById('volume');
+const volumeOut = document.getElementById('volumeOut');
+const alarmInput = document.getElementById('alarmOn');
+volumeInput.value = settings.volume;
+volumeOut.textContent = settings.volume;
+alarmInput.checked = settings.alarm;
+volumeInput.addEventListener('input', () => {
+  setVolume(Number(volumeInput.value));
+  volumeOut.textContent = volumeInput.value;
+});
+volumeInput.addEventListener('change', () => sfx('item')); // 손을 떼면 들어 보기
+alarmInput.addEventListener('change', () => setAlarmEnabled(alarmInput.checked));
 
 buildManual();
-document.getElementById('startBtn').addEventListener('click', (e) => {
+for (const [btn, id] of [['startBtn', 'stages'], ['manualBtn', 'manual'], ['settingsBtn', 'settings']]) {
+  document.getElementById(btn).addEventListener('click', (e) => {
+    e.currentTarget.blur();
+    openDialog(id);
+  });
+}
+document.getElementById('stage1').addEventListener('click', (e) => {
   e.currentTarget.blur();
   startGame();
 });
-document.getElementById('manualBtn').addEventListener('click', (e) => {
-  e.currentTarget.blur();
-  openManual();
-});
-document.getElementById('manualClose').addEventListener('click', closeManual);
-document.getElementById('manual').addEventListener('click', (e) => {
-  if (e.target.id === 'manual') closeManual(); // 바깥을 누르면 닫기
+document.querySelectorAll('.dialog').forEach((el) => {
+  el.querySelector('.close').addEventListener('click', closeDialog);
+  el.addEventListener('click', (e) => {
+    if (e.target === el) closeDialog(); // 바깥을 누르면 닫기
+  });
 });
 document.getElementById('restart').addEventListener('click', (e) => {
   e.currentTarget.blur();
