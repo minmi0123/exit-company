@@ -112,7 +112,17 @@ const ENEMY_TYPES = {
     attack: 0,        // 직접 공격하지 않는다
     notice: 2,        // 이 거리 안에 들어오면 알아채고 적을 부른다
     callCooldown: 8,  // 다시 부르기까지
-    lines: ['상사: "이거 누가 좀 해 봐." 주변 적이 몰려온다!'],
+    lines: [   // 부를 때
+      '상사: "이거 누가 좀 해 봐." 주변 적이 몰려온다!',
+      '상사: "아 그거 내가 말 안 했나?" 주변 적이 몰려온다!',
+      '상사: "다 같이 고민해 보자고~" 주변 적이 몰려온다!',
+      '상사: "나는 큰 그림만 볼게." 주변 적이 몰려온다!',
+    ],
+    leaveLines: [ // 쓰러질 때 (일을 떠넘기고 간다)
+      '상사: "나머진 알아서들 해~"',
+      '상사: "나 먼저 들어가 볼게. 내일 아침까지 부탁해~"',
+      '상사: "이건 다 같이 한 걸로 하자."',
+    ],
   },
 };
 
@@ -141,17 +151,18 @@ const BOSS = {
 };
 ENEMY_TYPES.boss = BOSS;
 
-// 층별 적 구성 (5F → 1F). 한 층에 한 종씩 새로 등장
+// 층별 적 구성 (5F → 1F). 상사는 재밌는 캐릭터라 4F 부터 자주 나온다 (2026-10, 원래 2F 1명)
 const ENEMIES_PER_FLOOR = {
   5: { donggi: 3 },
-  4: { donggi: 3, client: 2 },
-  3: { donggi: 3, client: 2, leader: 1 },
-  2: { donggi: 3, client: 2, leader: 2, sangsa: 1 },
+  4: { donggi: 3, client: 2, sangsa: 1 },
+  3: { donggi: 3, client: 2, leader: 1, sangsa: 1 },
+  2: { donggi: 3, client: 2, leader: 2, sangsa: 2 },
   1: { donggi: 2, client: 1 },  // 보스 층은 가볍게 (사장님이 동기를 불러오므로)
 };
 
-// 상사가 쓰러지면 남은 적 공격력이 이만큼 오른다
+// 상사가 쓰러지면 남은 적 공격력이 이만큼 오른다. 상사가 여럿이어도 적 하나당 SANGSA_BUFF_MAX 까지만
 const SANGSA_DEATH_BUFF = 1;
+const SANGSA_BUFF_MAX = 1;
 
 // 아이템. 층마다 min~max 개, chance 는 그 층에 나올 확률
 // tag/desc: 메뉴얼에 보이는 글 (수치는 쓰지 않는다)

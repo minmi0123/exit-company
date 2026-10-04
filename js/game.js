@@ -454,9 +454,18 @@ function removeEnemy(e) {
   if (e.type.ai === 'boss') {
     say('사장님을 먼저 퇴근시켰다!');
   } else if (e.type.ai === 'wander') {
-    // 상사: 쓰러지면서 일을 떠넘긴다 → 남은 적 공격력 상승
-    for (const o of state.enemies) o.bonus += SANGSA_DEATH_BUFF;
-    say(e.type.obj + ' 먼저 퇴근시켰다. …그런데 일을 떠넘기고 갔다! 남은 적 공격력 +' + SANGSA_DEATH_BUFF);
+    // 상사: 쓰러지면서 일을 떠넘긴다 → 남은 적 공격력 상승 (적 하나당 SANGSA_BUFF_MAX 까지)
+    let buffed = 0;
+    for (const o of state.enemies) {
+      if ((o.dumped || 0) >= SANGSA_BUFF_MAX) continue;
+      o.dumped = (o.dumped || 0) + 1;
+      o.bonus += SANGSA_DEATH_BUFF;
+      buffed += 1;
+    }
+    const leave = e.type.leaveLines[Math.floor(state.rng() * e.type.leaveLines.length)];
+    say(e.type.obj + ' 먼저 퇴근시켰다. ' + leave + (buffed
+      ? ' 일을 떠넘기고 갔다! 남은 적 공격력 +' + SANGSA_DEATH_BUFF
+      : ' (이미 다들 일이 넘쳐서 더 떠넘길 데가 없다)'));
   } else {
     say(e.type.obj + ' 먼저 퇴근시켰다.');
   }
