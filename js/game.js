@@ -454,9 +454,10 @@ function removeEnemy(e) {
   if (e.type.ai === 'boss') {
     say('사장님을 먼저 퇴근시켰다!');
   } else if (e.type.ai === 'wander') {
-    // 상사: 쓰러지면서 일을 떠넘긴다 → 남은 적 공격력 상승
+    // 상사: 쓰러지면서 일을 떠넘긴다 → 남은 적 공격력 상승 (쓰러뜨린 상사 수만큼 쌓인다)
     for (const o of state.enemies) o.bonus += SANGSA_DEATH_BUFF;
-    say(e.type.obj + ' 먼저 퇴근시켰다. …그런데 일을 떠넘기고 갔다! 남은 적 공격력 +' + SANGSA_DEATH_BUFF);
+    const leave = e.type.leaveLines[Math.floor(state.rng() * e.type.leaveLines.length)];
+    say(e.type.obj + ' 먼저 퇴근시켰다. ' + leave + ' 일을 떠넘기고 갔다! 남은 적 공격력 +' + SANGSA_DEATH_BUFF);
   } else {
     say(e.type.obj + ' 먼저 퇴근시켰다.');
   }
