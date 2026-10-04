@@ -160,9 +160,8 @@ const ENEMIES_PER_FLOOR = {
   1: { donggi: 2, client: 1 },  // 보스 층은 가볍게 (사장님이 동기를 불러오므로)
 };
 
-// 상사가 쓰러지면 남은 적 공격력이 이만큼 오른다. 상사가 여럿이어도 적 하나당 SANGSA_BUFF_MAX 까지만
+// 상사가 쓰러지면 남은 적 공격력이 이만큼 오른다. 상사를 쓰러뜨린 수만큼 쌓인다 (상한 없음)
 const SANGSA_DEATH_BUFF = 1;
-const SANGSA_BUFF_MAX = 1;
 
 // 아이템. 층마다 min~max 개, chance 는 그 층에 나올 확률
 // tag/desc: 메뉴얼에 보이는 글 (수치는 쓰지 않는다)
