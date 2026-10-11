@@ -370,6 +370,7 @@ function setStage(stage) {
   if (stage === STAGE) return;
   STAGE = stage;
   buildItemButtons();
+  refreshOutfit(); // 옷을 따로 안 골랐으면 탄의 기본 옷으로 바뀐다
 }
 
 // daily = 오늘의 출근 (날짜 시드, 첫 탄에서 한다)
@@ -495,6 +496,59 @@ function openDialog(id) {
   if (id === 'dex') buildDex();
   if (id === 'records') buildRecords();
   if (id === 'stages') buildStageList();
+  if (id === 'shop') buildShop();
+}
+
+// 상점 — data.js 의 OUTFITS 로 만든다. 사거나 갈아입을 때마다 새로 그린다
+// 맨 위 "탄에 맞게" = 옷을 따로 고르지 않은 상태 (탄마다 기본 옷)
+function buildShop() {
+  const wallet = loadWallet();
+  document.getElementById('shopMoney').textContent = wallet.money + WAGE.unit;
+  const list = document.getElementById('shopList');
+  list.innerHTML = '';
+  const sprite = (o) => {
+    if (!heroWalkers[o.id]) heroWalkers[o.id] = makeWalker(o.colors);
+    return heroWalkers[o.id].right[0];
+  };
+  const save = (change) => {
+    change(wallet);
+    saveJson(WALLET_KEY, wallet);
+    refreshOutfit();
+    buildShop();
+  };
+  const row = (id, img, name, desc, price, owned) => {
+    const wearing = wallet.outfit === id;
+    const card = manualCard(img, name, owned || !price ? [] : [[price + WAGE.unit, 'tag']], desc);
+    const btn = document.createElement('button');
+    if (wearing) {
+      btn.textContent = '입는 중';
+      btn.disabled = true;
+      card.classList.add('wearing');
+    } else if (owned) {
+      btn.textContent = '입기';
+      btn.addEventListener('click', () => {
+        sfx('item');
+        save((w) => { w.outfit = id; });
+      });
+    } else {
+      btn.textContent = '사기';
+      btn.className = 'buy';
+      btn.disabled = wallet.money < price; // 돈이 모자라면 못 누른다
+      btn.addEventListener('click', () => {
+        sfx('perk');
+        save((w) => { // 사면 바로 입는다
+          w.money -= price;
+          w.owned.push(id);
+          w.outfit = id;
+        });
+      });
+    }
+    card.append(btn);
+    list.append(card);
+  };
+  const names = STAGES.filter((s) => s.outfit).map((s) => OUTFITS.find((o) => o.id === s.outfit).name);
+  row('auto', sprite(OUTFITS[0]), '탄에 맞게', '탄마다 알아서 갈아입는다 (' + names.join(' · ') + ').', 0, true);
+  for (const o of OUTFITS) row(o.id, sprite(o), o.name, o.desc, o.price, ownsOutfit(wallet, o));
 }
 
 // 탄 고르기 — data.js 의 STAGES 로 만든다. 열 때마다 최고 기록을 새로 읽는다
@@ -627,7 +681,7 @@ volumeInput.addEventListener('input', () => {
 volumeInput.addEventListener('change', () => sfx('item')); // 손을 떼면 들어 보기
 alarmInput.addEventListener('change', () => setAlarmEnabled(alarmInput.checked));
 
-for (const [btn, id] of [['startBtn', 'stages'], ['manualBtn', 'manual'], ['dexBtn', 'dex'], ['recordsBtn', 'records'], ['settingsBtn', 'settings']]) {
+for (const [btn, id] of [['startBtn', 'stages'], ['shopBtn', 'shop'],['manualBtn', 'manual'], ['dexBtn', 'dex'], ['recordsBtn', 'records'], ['settingsBtn', 'settings']]) {
   document.getElementById(btn).addEventListener('click', (e) => {
     e.currentTarget.blur();
     openDialog(id);

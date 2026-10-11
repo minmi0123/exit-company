@@ -143,7 +143,7 @@ function draw() {
   // 맞았을 때: 좌우로 2px 흔들리다 잦아든다
   const hitT = h.hitAt ? (now - h.hitAt) / HIT_MS : 1;
   const hitDx = hitT < 1 ? Math.round(Math.sin(hitT * Math.PI * 6) * 2 * (1 - hitT)) : 0;
-  drawWalker(SPRITES.hero, h, now, 1, hitDx);
+  drawWalker(heroWalker(), h, now, 1, hitDx);
   ctx.globalAlpha = 1;
 
   // 던지기 조준 표시: 지금 던지면 맞을 적의 네 귀퉁이에 노란 꺾쇠

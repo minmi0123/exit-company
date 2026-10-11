@@ -191,9 +191,10 @@ h1 { font-size: 18px; margin: 0; }
 }
 #title p { margin: 0; font-size: 14px; }
 #titleBest { color: var(--muted); font-size: 12px !important; min-height: 1em; }
-/* 퇴근하기는 한 줄을 다 쓰고, 나머지 넷은 그 아래 한 줄에 */
+/* 첫 줄: 퇴근하기(크게) + 상점. 나머지 넷은 그 아래 한 줄에 */
 #title .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 4px; width: min(100%, 340px); }
-#title #startBtn { grid-column: 1 / -1; }
+#title #startBtn { grid-column: 1 / 4; }
+#title #shopBtn { font-size: 15px; }
 #title button.sub { padding: 8px 2px; font-size: 13px; white-space: nowrap; }
 /* 시작 연출 중엔 그림과 한 줄만 남긴다 (자리는 그대로 둬서 그림이 움직이지 않게) */
 #title.leaving .buttons, #title.leaving #titleBest { visibility: hidden; }
@@ -328,6 +329,19 @@ h1 { font-size: 18px; margin: 0; }
 .dialog .cards li.unknown .name b { color: var(--muted); }
 .dialog .cards .seen { color: #7fd6a8; font-size: 12px; }
 .dialog .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+/* 상점 */
+.dialog .wallet { font-size: 16px; }
+.dialog .wallet b { color: var(--accent); font-weight: normal; }
+#shopList li { align-items: center; }
+#shopList li > div { flex: 1; }
+#shopList li.wearing { outline: 2px solid var(--accent); }
+/* 입기 · 사기 · 입는 중: 글자 수가 달라도 같은 너비 (옆 설명 글의 줄바꿈이 옷마다 달라지지 않게) */
+#shopList button { flex: none; width: 5.5em; padding: 6px 0; white-space: nowrap; background: var(--panel); }
+#shopList button.buy { background: var(--accent); color: #1d1a22; }
+#shopList button:disabled { background: transparent; color: var(--muted); cursor: default; }
+#shopList button.buy:disabled { background: var(--panel); color: #5d5768; }
+/* 결과 화면의 월급 한 줄 */
+#overlay #wage { color: #7fd6a8; font-size: 12px; }
 /* 기록 */
 .dialog .stats { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 4px 0 0; }
 .dialog .stats dt { color: var(--muted); }

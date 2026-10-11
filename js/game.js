@@ -740,6 +740,48 @@ function saveJson(key, value) {
   }
 }
 
+// 통장과 옷장 (탄을 가리지 않고 하나). money = 모은 월급 · owned = 산 옷 · outfit = 입은 옷
+// outfit 'auto' = 탄에 맞게 (1탄 셔츠 · 2탄 잠옷). 옷을 고르면 그 옷을 어느 탄에서나 입는다
+const WALLET_KEY = 'exit-company.wallet';
+
+function loadWallet() {
+  return { money: 0, owned: [], outfit: 'auto', ...loadJson(WALLET_KEY) };
+}
+
+function ownsOutfit(wallet, outfit) {
+  return outfit.price === 0 || wallet.owned.includes(outfit.id);
+}
+
+// 지금 입고 있는 옷 (고른 옷이 없거나 못 찾으면 이 탄의 기본 옷)
+function currentOutfit() {
+  const wallet = loadWallet();
+  const picked = OUTFITS.find((o) => o.id === wallet.outfit && ownsOutfit(wallet, o));
+  return picked || OUTFITS.find((o) => o.id === STAGE.outfit) || OUTFITS[0];
+}
+
+// 주인공 그림: 옷마다 한 번만 만들어 둔다. 매 프레임 불리므로 통장은 옷이나 탄이 바뀔 때만 다시 읽는다
+const heroWalkers = {};
+let heroOutfit = null;
+
+function refreshOutfit() {
+  heroOutfit = currentOutfit();
+}
+
+function heroWalker() {
+  if (!heroOutfit) refreshOutfit();
+  if (!heroWalkers[heroOutfit.id]) heroWalkers[heroOutfit.id] = makeWalker(heroOutfit.colors);
+  return heroWalkers[heroOutfit.id];
+}
+
+// 판이 끝나면 월급이 들어온다. 받은 돈과 통장 잔액을 돌려준다
+function payWage() {
+  const pay = state.stats.kills * WAGE.perKill + state.stats.items * WAGE.perItem;
+  const wallet = loadWallet();
+  wallet.money += pay;
+  saveJson(WALLET_KEY, wallet);
+  return { pay, money: wallet.money };
+}
+
 // 기록 화면용 누적 기록. recent = 최근 판 (새 판이 앞)
 const RECENT_MAX = 5;
 
@@ -904,6 +946,8 @@ function finish(cleared) {
   document.getElementById('restart').textContent = t.restart;
   recordRun(cleared, showScore(cleared));
   document.getElementById('perks').textContent = state.perks.length ? '받은 강화: ' + perksText() : '';
+  const wage = payWage();
+  document.getElementById('wage').textContent = '월급 +' + wage.pay + WAGE.unit + ' (통장 ' + wage.money + WAGE.unit + ')';
   // 성공이면 점수 쪽에 최고 점수가 나오므로 층 기록은 실패했을 때만
   document.getElementById('best').textContent = cleared ? '' : t.best(best);
   overlayTimer = setTimeout(() => {

@@ -193,7 +193,8 @@ const HOME = {
   open: true,
   requires: 'company',              // 1탄을 한 번 깨야 열린다
   topFloor: 4,
-  hero: HERO,                       // 능력치는 1탄과 같다
+  outfit: 'pajama',                 // 옷을 따로 고르지 않았으면 집에선 잠옷
+  hero: HERO,                      // 능력치는 1탄과 같다
   perks: HOME_PERKS,
   enemies: HOME_ENEMIES,
   enemiesPerFloor: HOME_ENEMIES_PER_FLOOR,
