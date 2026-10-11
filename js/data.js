@@ -282,6 +282,7 @@ const COMPANY = {
     clearBonus: '모두 퇴근시켰다! 보너스 강화: ', // 층의 적을 다 쓰러뜨렸을 때
     floorItem: (item) => '사내 인맥으로 ' + item.name + '를 챙겼다.', // 강화 "사내 인맥"
     bossWhere: '1F 출구',                         // 도감에 적는 보스 위치
+    dexVerb: '퇴근시킴',                          // 도감: "퇴근시킴 3번"
     win: '퇴근 성공!',
     lose: '멘탈 붕괴…',
     winResult: (clock, overtime) => '퇴근 시각 ' + clock + (overtime > 0

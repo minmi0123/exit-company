@@ -449,11 +449,11 @@ function silhouette(sprite) {
 // 도감 — 열 때마다 기록을 읽어 새로 만든다
 function buildDex() {
   const dex = loadDex();
-  const fill = (listId, countId, entries, group, verb) => {
+  const fill = (listId, countId, entries, group) => {
     const list = document.getElementById(listId);
     list.innerHTML = '';
     let seen = 0;
-    for (const [kind, sprite, name, tags, desc] of entries) {
+    for (const [kind, sprite, name, tags, desc, verb] of entries) {
       const n = dex[group][kind] || 0;
       if (n > 0) {
         seen += 1;
@@ -475,11 +475,11 @@ function buildDex() {
   const stages = STAGES.filter((s) => s.open);
   fill('dexEnemies', 'dexEnemyCount', stages.flatMap((s) => Object.entries(s.enemies).map(([kind, t]) => [
     kind, SPRITES[kind].right[0], t.name,
-    [[AI_TAG[t.ai], 'tag'], [t.boss ? s.text.bossWhere : s.text.floorName(firstFloorOf(kind, s)) + ' 부터', 'tag where']], t.desc,
-  ])), 'enemies', '퇴근시킴');
+    [[AI_TAG[t.ai], 'tag'], [t.boss ? s.text.bossWhere : s.text.floorName(firstFloorOf(kind, s)) + ' 부터', 'tag where']], t.desc, s.text.dexVerb,
+  ])), 'enemies');
   fill('dexItems', 'dexItemCount', stages.flatMap((s) => Object.entries(s.items).map(([kind, t]) => [
-    kind, SPRITES[kind], t.name, [[t.tag, 'tag'], [t.key + ' 키', 'tag where']], t.desc,
-  ])), 'items', '먹음');
+    kind, SPRITES[kind], t.name, [[t.tag, 'tag'], [t.key + ' 키', 'tag where']], t.desc, '먹음',
+  ])), 'items');
 }
 
 // 창 (게임 방법 · 도감 · 탄 고르기 · 환경설정): 한 번에 하나만 연다

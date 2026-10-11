@@ -125,7 +125,7 @@ const HOME_ENEMIES = {
     boss: true,
     scale: 2,
     desc: '침대를 차지하고 있다. 뿌리쳐야 누울 수 있다. 알아챈 뒤로 시간을 순삭하며 점점 세지고, 숏폼을 계속 추천한다. 평소엔 한 턴씩 걸러 움직이지만 (머리 위 "!" = 다음 턴에 행동), 궁지에 몰리면 매 턴 움직인다.',
-    hp: 24,           // 1탄 사장님은 30. 방이 하나 적어 강화를 덜 받고 오므로 낮췄다
+    hp: 27,           // 1탄 사장님은 30. 방이 하나 적어 강화를 덜 받고 오므로 낮췄다. 24 는 조금 쉽다는 평가로 27 (2026-10-11)
     attack: 5,
     sight: 6,
     summonEvery: 5,
@@ -217,6 +217,7 @@ const HOME = {
     clearBonus: '유혹을 모두 뿌리쳤다! 보너스 강화: ',
     floorItem: (item) => '정리해 둔 덕에 ' + (item.obj || item.name + '를') + ' 찾았다.', // 강화 "정리 정돈"
     bossWhere: '침실 침대 앞',
+    dexVerb: '뿌리침',
     win: '취침 성공!',
     lose: '의지 박약…',
     winResult: (clock, overtime) => {
