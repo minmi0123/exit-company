@@ -47,6 +47,24 @@ const PALETTE = {
   Y: '#f2b33d', // 맥주
   R: '#e04f5f', // 헤드폰 · 빨간 볼
   K: '#2b2b33', // 헤드폰 머리띠
+  // 2탄 집
+  F: '#c9a57a', // 마룻바닥
+  H: '#b9935f', // 마룻바닥 이음매
+  N: '#d5dcc6', // 벽지
+  M: '#bcc6aa', // 벽지 줄무늬 · 그림자
+  D: '#6b4630', // 짙은 나무 (걸레받이 · 문틀 · 침대 머리판 · TV 장)
+  S: '#6a8fb5', // 소파
+  T: '#4f7396', // 소파 그림자
+  O: '#30343e', // 가전 검정 (TV · 폰)
+  E: '#efe8d8', // 침대 시트
+  I: '#c0607a', // 이불
+  J: '#9a4760', // 이불 그림자
+  U: '#57b894', // 배달 헬멧 민트
+  V: '#5fae4e', // 소주병 초록
+  1: '#ff5fa2', // 숏폼 분홍
+  2: '#4fd6e0', // 숏폼 하늘 · 알고리즘 눈
+  3: '#e50914', // 넷플릭스 빨강
+  4: '#ffd75a', // 방해금지 초승달
 };
 
 // 적은 모두 신입사원과 같은 몸 도트에 색만 바꾸고, 소품을 덧그린다
@@ -331,10 +349,10 @@ const SHELF = [
   '..o..........o..',
 ];
 
-// 가구 도트의 '.' 자리에 카펫을 깐다 (가구 칸도 바닥 무늬가 이어져 보이게)
-function onFloor(rows, ox = 0, oy = 0) {
+// 가구 도트의 '.' 자리에 바닥을 깐다 (가구 칸도 바닥 무늬가 이어져 보이게). 기본은 사무실 카펫
+function onFloor(rows, ox = 0, oy = 0, floor = FLOOR) {
   return Array.from({ length: TILE }, (_, y) =>
-    [...rows[oy + y].slice(ox, ox + TILE)].map((ch, x) => (ch === '.' ? FLOOR[y][x] : ch)).join(''));
+    [...rows[oy + y].slice(ox, ox + TILE)].map((ch, x) => (ch === '.' ? floor[y][x] : ch)).join(''));
 }
 
 // 내려가는 계단
@@ -461,6 +479,271 @@ const BOSS_PROP = [
 ];
 
 // ─────────────────────────────────────────────
+// 2탄 집 — 바닥 · 벽 · 가구 · 유혹(적) · 아이템
+// ─────────────────────────────────────────────
+const HOME_FLOOR = [
+  'FFFFFFFFFFFFFFFF',
+  'FFFFFFFFFFFFFFFF',
+  'FFFFFFFFFFFFFFFF',
+  'HHHHHHHHHHHHHHHH',
+  'FFFFFHFFFFFFFFFF',
+  'FFFFFHFFFFFFFFFF',
+  'FFFFFHFFFFFFFFFF',
+  'HHHHHHHHHHHHHHHH',
+  'FFFFFFFFFFFFHFFF',
+  'FFFFFFFFFFFFHFFF',
+  'FFFFFFFFFFFFHFFF',
+  'HHHHHHHHHHHHHHHH',
+  'FFHFFFFFFFFFFFFF',
+  'FFHFFFFFFFFFFFFF',
+  'FFHFFFFFFFFFFFFF',
+  'HHHHHHHHHHHHHHHH',
+];
+
+// 벽 앞면: 줄무늬 벽지 + 나무 걸레받이
+const HOME_WALL = [
+  ...Array(10).fill('NNNMNNNMNNNMNNNM'),
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'DDDDDDDDDDDDDDDD',
+  'DDDDDDDDDDDDDDDD',
+  'oooooooooooooooo',
+];
+const HOME_WALL_TOP = Array(TILE).fill('MMMMMMMMMMMMMMMM');
+
+// 소파 (한 칸짜리. 두 칸을 나란히 놓는다)
+const SOFA = [
+  '................',
+  '................',
+  '..oooooooooooo..',
+  '..oSSSSSSSSSSo..',
+  '..oSSSSSSSSSSo..',
+  '..oSSSSSSSSSSo..',
+  '.oooTTTTTTTTooo.',
+  '.oSoSSSSSSSSoSo.',
+  '.oSoSSSSSSSSoSo.',
+  '.oSoTTTTTTTToSo.',
+  '.oSooooooooooSo.',
+  '.oTTTTTTTTTTTTo.',
+  '.oooooooooooooo.',
+  '..oo........oo..',
+  '................',
+  '................',
+];
+
+// 식탁 (2x2 칸): 회의 테이블 모양에 의자는 나무, 상 위엔 접시
+const HOME_TABLE = MEETING.map((row, y) => (y < 5 || y > 26
+  ? row.replace(/t/g, 'D')
+  : row.replace(/t/g, 'P').replace(/l/g, 'Y')));
+
+const TV = [
+  '................',
+  '.oooooooooooooo.',
+  '.oOOOOOOOOOOOOo.',
+  '.oOllllllllllOo.',
+  '.oOlwwlllllllOo.',
+  '.oOlwllllllllOo.',
+  '.oOllllllllllOo.',
+  '.oOllllllllllOo.',
+  '.oOOOOOOOOOOOOo.',
+  '.oooooooooooooo.',
+  '......oooo......',
+  '..oooooooooooo..',
+  '..oDDDDDDDDDDo..',
+  '..oDDoDDDDoDDo..',
+  '..oooooooooooo..',
+  '..o..........o..',
+];
+
+// 냉장고: 부딪히면 탄산수 한 병 (집의 정수기). 파란 쪽지 = 아직 남았다
+const FRIDGE = [
+  '................',
+  '...oooooooooo...',
+  '...oAAAAAAAAo...',
+  '...oACCAAAAAo...',
+  '...oACCAAABAo...',
+  '...oAAAAAABAo...',
+  '...oooooooooo...',
+  '...oAAAAAAAAo...',
+  '...oAAAAAABAo...',
+  '...oAAAAAABAo...',
+  '...oAAAAAABAo...',
+  '...oAAAAAAAAo...',
+  '...oAAAAAAAAo...',
+  '...oBBBBBBBBo...',
+  '...oooooooooo...',
+  '................',
+];
+
+// 다음 방으로 가는 문 (집의 계단)
+const DOOR = [
+  '................',
+  '..oooooooooooo..',
+  '..oDDDDDDDDDDo..',
+  '..oDeeeeeeeeDo..',
+  '..oDeeeeeeeeDo..',
+  '..oDeeeeeeeeDo..',
+  '..oDeeeeeeeeDo..',
+  '..oDeeeeeeeeDo..',
+  '..oDeeeeeeyeDo..',
+  '..oDeeeeeeeeDo..',
+  '..oDeeeeeeeeDo..',
+  '..oDeeeeeeeeDo..',
+  '..oDeeeeeeeeDo..',
+  '..oDeeeeeeeeDo..',
+  '..oooooooooooo..',
+  '................',
+];
+
+// 침대 (집의 출구)
+const BED = [
+  '................',
+  '.oooooooooooooo.',
+  '.oDDDDDDDDDDDDo.',
+  '.oooooooooooooo.',
+  '.oEEEEEEEEEEEEo.',
+  '.oEEPPPPPPPPEEo.',
+  '.oEEPPPPPPPPEEo.',
+  '.oEEEEEEEEEEEEo.',
+  '.oIIIIIIIIIIIIo.',
+  '.oIIIIIIIIIIIIo.',
+  '.oIJIIIIIIIIJIo.',
+  '.oIIIIIIIIIIIIo.',
+  '.oIIIIIIIIIIIIo.',
+  '.oJJJJJJJJJJJJo.',
+  '.oooooooooooooo.',
+  '................',
+];
+
+// 유혹(적)도 같은 몸 도트에 색을 바꾸고 소품을 덧그린다
+const BLANK_ROW = '................';
+
+// 넷플릭스 — 머리가 TV (빨간 N)
+const NETFLIX_COLORS = { w: '#8c1c22', n: '#1f1f24', r: '#1f1f24', y: '#e50914' };
+const NETFLIX_PROP = [
+  BLANK_ROW,
+  '..oooooooooooo..',
+  '..oOOOOOOOOOOo..',
+  '..oOO3OOO3OOOo..',
+  '..oOO33OO3OOOo..',
+  '..oOO3O3O3OOOo..',
+  '..oOO3OO33OOOo..',
+  '..oOO3OOO3OOOo..',
+  '..oooooooooooo..',
+  ...Array(7).fill(BLANK_ROW),
+];
+
+// 배달 앱 — 민트 헬멧 + 배달 상자
+const DELIVERY_COLORS = { h: '#57b894', w: '#f4f4f0', n: '#3d4552', r: '#57b894', y: '#57b894' };
+const DELIVERY_PROP = [
+  ...Array(8).fill(BLANK_ROW),
+  '............oooo',
+  '............oddo',
+  '............oPdo',
+  '............oddo',
+  '............oooo',
+  ...Array(3).fill(BLANK_ROW),
+];
+
+// 숏폼 — 머리가 폰 화면 (재생 버튼)
+const SHORTS_COLORS = { w: '#2b2b33', n: '#2b2b33', r: '#ff5fa2', y: '#4fd6e0' };
+const SHORTS_PROP = [
+  BLANK_ROW,
+  '...oooooooooo...',
+  '...o11111111o...',
+  '...o111P1111o...',
+  '...o111PP222o...',
+  '...o111PP222o...',
+  '...o111P2222o...',
+  '...o22222222o...',
+  '...oooooooooo...',
+  ...Array(7).fill(BLANK_ROW),
+];
+
+// 술 — 빨간 볼 + 초록 병
+const SOJU_COLORS = { w: '#5fae4e', n: '#3a4a38', r: '#f4f4f0', y: '#f4f4f0' };
+const SOJU_PROP = [
+  ...Array(6).fill(BLANK_ROW),
+  '.............oo.',
+  '....R......R.oVo',
+  '............oVVo',
+  '............oPPo',
+  '............oVVo',
+  '............oVVo',
+  '............oooo',
+  ...Array(3).fill(BLANK_ROW),
+];
+
+// 보스: 새벽 2시의 알고리즘 — 보라 후드, 얼굴은 어둠 속에서 눈만 빛난다. 2배 크기
+const ALGO_COLORS = { h: '#5a3fa0', s: '#1b1b22', w: '#3d2a73', n: '#23232b', r: '#ff5fa2', y: '#4fd6e0' };
+const ALGO_PROP = [
+  ...Array(6).fill(BLANK_ROW),
+  '.....22..22.....',
+  ...Array(9).fill(BLANK_ROW),
+];
+
+// 아이템 — 물 한 잔
+const WATER = [
+  BLANK_ROW,
+  BLANK_ROW,
+  BLANK_ROW,
+  '.....oooooo.....',
+  '.....oxxxxo.....',
+  '.....oxxxxo.....',
+  '.....oCCCCo.....',
+  '.....oCCCCo.....',
+  '.....oCwCCo.....',
+  '.....oCwCCo.....',
+  '.....oCCCCo.....',
+  '.....oCCCCo.....',
+  '......oooo......',
+  BLANK_ROW,
+  BLANK_ROW,
+  BLANK_ROW,
+];
+
+// 아이템 — 방해금지 모드 (폰 화면에 초승달)
+const DND = [
+  BLANK_ROW,
+  '....oooooooo....',
+  '....oOOOOOOo....',
+  '....oOOO44Oo....',
+  '....oOO44OOo....',
+  '....oO44OOOo....',
+  '....oO44OOOo....',
+  '....oO44OOOo....',
+  '....oOO44OOo....',
+  '....oOOO44Oo....',
+  '....oOOOOOOo....',
+  '....oOOOOOOo....',
+  '....oOOooOOo....',
+  '....oooooooo....',
+  BLANK_ROW,
+  BLANK_ROW,
+];
+
+// 아이템 — 자기계발서
+const BOOK = [
+  BLANK_ROW,
+  BLANK_ROW,
+  '...oooooooooo...',
+  '...oRRRRRRRRo...',
+  '...oRRRRRRRRo...',
+  '...oRyyyyyyRo...',
+  '...oRyyyyyyRo...',
+  '...oRRRRRRRRo...',
+  '...oRRRyyRRRo...',
+  '...oRRRyyRRRo...',
+  '...oRRRRRRRRo...',
+  '...oRRRRRRRRo...',
+  '...oPPPPPPPPo...',
+  '...oooooooooo...',
+  BLANK_ROW,
+  BLANK_ROW,
+];
+
+// ─────────────────────────────────────────────
 // 2. 도트 → 오프스크린 캔버스 (한 번만 그려 둔다)
 // ─────────────────────────────────────────────
 function makeSprite(rows, { flip = false, colors = {} } = {}) {
@@ -517,4 +800,25 @@ const SPRITES = {
   coffee: makeSprite(COFFEE),
   annual: makeSprite(ANNUAL),
   half: makeSprite(HALF),
+  // 2탄 집
+  homeFloor: makeSprite(HOME_FLOOR),
+  homeWall: makeSprite(HOME_WALL),
+  homeWallTop: makeSprite(HOME_WALL_TOP),
+  sofa: makeSprite(onFloor(SOFA, 0, 0, HOME_FLOOR)),
+  homeTable: [[0, 0], [TILE, 0], [0, TILE], [TILE, TILE]].map(([x, y]) => makeSprite(onFloor(HOME_TABLE, x, y, HOME_FLOOR))),
+  tv: makeSprite(onFloor(TV, 0, 0, HOME_FLOOR)),
+  fridge: makeSprite(onFloor(FRIDGE, 0, 0, HOME_FLOOR)),
+  fridgeEmpty: makeSprite(onFloor(FRIDGE, 0, 0, HOME_FLOOR), { colors: { C: PALETTE.A } }),
+  homePlant: makeSprite(onFloor(PLANT, 0, 0, HOME_FLOOR)),
+  homeShelf: makeSprite(onFloor(SHELF, 0, 0, HOME_FLOOR)),
+  door: makeSprite(onFloor(DOOR, 0, 0, HOME_FLOOR)),
+  bed: makeSprite(onFloor(BED, 0, 0, HOME_FLOOR)),
+  netflix: makeWalker(NETFLIX_COLORS, NETFLIX_PROP),
+  delivery: makeWalker(DELIVERY_COLORS, DELIVERY_PROP),
+  shorts: makeWalker(SHORTS_COLORS, SHORTS_PROP),
+  soju: makeWalker(SOJU_COLORS, SOJU_PROP),
+  algo: makeWalker(ALGO_COLORS, ALGO_PROP),
+  water: makeSprite(WATER),
+  dnd: makeSprite(DND),
+  book: makeSprite(BOOK),
 };

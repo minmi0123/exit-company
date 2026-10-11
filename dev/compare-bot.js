@@ -4,8 +4,11 @@
 //   JSON.stringify([...runBot(100, 1000, 0), ...runBot(100, 5000, 40), ...runBot(100, 9000, 150)])
 // 를 실행해 두 결과가 글자 하나까지 같은지 본다. (저장된 기록을 지우고 시작하니 평소 쓰는 브라우저 말고 다른 창에서)
 // boost = 주인공 멘탈을 그만큼 올려 깊은 층 · 보스까지 가 보게 한다
-window.runBot = function (count, firstSeed = 1000, boost = 0, maxSteps = 4000) {
-  const BL = new Set([...'#DTPCWVS']);
+// stage = 돌릴 탄 (기본: 1탄). 예) runBot(100, 1000, 0, STAGES[1])
+window.runBot = function (count, firstSeed = 1000, boost = 0, stage = STAGES[0], maxSteps = 4000) {
+  const BL = BLOCKING;
+  if (typeof setStage === 'function') setStage(stage);
+  const has = (flag) => Object.keys(STAGE.items).find((k) => STAGE.items[k][flag] && state.bag[k] > 0);
   const DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   const fnv = (h, s) => {
     for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
@@ -30,9 +33,8 @@ window.runBot = function (count, firstSeed = 1000, boost = 0, maxSteps = 4000) {
       const hero = state.hero;
       if (state.choosing) {
         choosePerk(state.perkChoices[Math.floor(r() * state.perkChoices.length)]);
-      } else if (state.grab && state.bag.annual > 0) useItem('annual');
-      else if (state.grab && state.bag.half > 0) useItem('half');
-      else if (state.mental <= 8 && state.bag.coffee > 0) useItem('coffee');
+      } else if (state.grab && has('escape')) useItem(has('escape'));
+      else if (state.mental <= 8 && has('heal')) useItem(has('heal'));
       else if (state.throwCd === 0 && throwTarget()) throwPen();
       else if (stuck >= 2) {
         act(Object.keys(DIRV)[Math.floor(r() * 4)]);
@@ -52,7 +54,7 @@ window.runBot = function (count, firstSeed = 1000, boost = 0, maxSteps = 4000) {
           }
         }
         if (!target) {
-          grid.forEach((row, y) => row.forEach((t, x) => { if (t === '>' || t === 'E') target = { x, y }; }));
+          grid.forEach((row, y) => row.forEach((t, x) => { if (TILES[t].goal) target = { x, y }; }));
         }
         const toT = distances(grid, target, BL);
         let dir = null;

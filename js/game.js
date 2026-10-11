@@ -80,6 +80,7 @@ function offerPerks() {
     cards.appendChild(btn);
   });
   state.perkChoices = picks;
+  document.getElementById('perkTitle').textContent = STAGE.text.perkTitle;
   document.getElementById('perk').className = 'show';
   updateHud();
 }
@@ -103,7 +104,7 @@ function clearBonus() {
   applyPerk(p);
   state.shake = 4;
   sfx('perk');
-  say('모두 퇴근시켰다! 보너스 강화: ' + p.name + ' — ' + p.desc);
+  say(STAGE.text.clearBonus + p.name + ' — ' + p.desc);
 }
 
 function choosePerk(p) {
@@ -119,13 +120,13 @@ function choosePerk(p) {
   updateHud();
 }
 
-// 사내 인맥: 층 시작마다 무작위 아이템
+// 강화 floorItems (1탄 "사내 인맥"): 층 시작마다 무작위 아이템
 function giveFloorItems() {
   const kinds = Object.keys(STAGE.items);
   for (let i = 0; i < state.stat.floorItems; i++) {
     const kind = kinds[Math.floor(state.rng() * kinds.length)];
     state.bag[kind] += 1;
-    say('사내 인맥으로 ' + STAGE.items[kind].name + '를 챙겼다.');
+    say(STAGE.text.floorItem(STAGE.items[kind]));
   }
 }
 
@@ -199,8 +200,8 @@ function clockText() {
 }
 
 // 야근한 분 → 시각 ("21:30")
-function clockOf(overtime) {
-  const m = STAGE.clock.start + overtime;
+function clockOf(overtime, stage = STAGE) {
+  const m = stage.clock.start + overtime;
   return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 }
 
@@ -252,7 +253,7 @@ function act(dir) {
       const heal = state.stat.coolerHeal + state.stat.healBonus;
       state.mental = Math.min(state.stat.maxMental, state.mental + heal);
       sfx('drink');
-      say(drink.line(heal));
+      say(drink.line(heal, STAGE.text.hp));
     } else if (BLOCKING.has(tileAt(nx, ny))) {
       state.shake = 6; // 막힘: 턴을 소모하지 않는다
       return;
@@ -403,7 +404,7 @@ function pickUp() {
   recordDex('items', item.kind);
   sfx('item');
   const type = STAGE.items[item.kind];
-  say(type.name + '를 주웠다. (' + type.key + '번으로 사용)');
+  say((type.obj || type.name + '를') + ' 주웠다. (' + type.key + '번으로 사용)');
 }
 
 // 아이템 효과는 data.js 의 아이템 표(heal · turns · escape …)대로 적용한다
@@ -412,7 +413,7 @@ function useItem(kind) {
   beginAction();
   const type = STAGE.items[kind];
   if (state.bag[kind] <= 0) {
-    say(type.name + '가 없다.');
+    say((type.subj || type.name + '가') + ' 없다.');
     return; // 턴을 쓰지 않는다
   }
   state.bag[kind] -= 1;
@@ -467,9 +468,9 @@ function removeEnemy(e) {
     // 쓰러지면서 일을 떠넘긴다 → 남은 적 공격력 상승 (쓰러뜨린 수만큼 쌓인다)
     for (const o of state.enemies) o.bonus += e.type.deathBuff;
     const leave = e.type.leaveLines[Math.floor(state.rng() * e.type.leaveLines.length)];
-    say(e.type.obj + ' 먼저 퇴근시켰다. ' + leave + ' ' + e.type.deathBuffLine + e.type.deathBuff);
+    say(STAGE.text.defeat(e.type.obj, false) + ' ' + leave + ' ' + e.type.deathBuffLine + e.type.deathBuff);
   } else {
-    say(e.type.obj + ' 먼저 퇴근시켰다' + (e.type.boss ? '!' : '.'));
+    say(STAGE.text.defeat(e.type.obj, e.type.boss));
   }
   if (state.enemies.length === 0) {
     if (state.floor === 1) say(STAGE.text.exitOpen);
@@ -681,7 +682,7 @@ function hurtHero(e, dmg, line) {
   state.shake = 8;
   h.hitAt = performance.now(); // 맞은 순간: 주인공이 좌우로 흔들린다
   popup(h.x, h.y, '-' + dmg, '#ff7a7a');
-  say(line + ' 멘탈 -' + dmg);
+  say(line + ' ' + STAGE.text.hp + ' -' + dmg);
   if (state.mental <= 0) {
     state.mental = 0;
     finish(false); // 죽는 소리는 finish 가 낸다
@@ -742,8 +743,8 @@ function saveJson(key, value) {
 // 기록 화면용 누적 기록. recent = 최근 판 (새 판이 앞)
 const RECENT_MAX = 5;
 
-function loadRecords() {
-  return { plays: 0, clears: 0, bestOvertime: null, bestTurns: null, recent: [], ...loadJson(storeKey('records')) };
+function loadRecords(stage = STAGE) {
+  return { plays: 0, clears: 0, bestOvertime: null, bestTurns: null, recent: [], ...loadJson(storeKey('records', stage)) };
 }
 
 // 오늘의 출근: 날짜(20261011)가 시드. 오늘 기록은 날이 바뀌면 비우고, 연속 출근 일수만 이어 간다
@@ -823,12 +824,13 @@ const SCORE = {
 };
 
 function scoreLines() {
+  const t = STAGE.text;
   return [
-    ['퇴근 성공', SCORE.clear],
-    ['퇴근시킨 적 ' + state.stats.kills + '명', state.stats.kills * SCORE.perKill],
-    ['모은 아이템 ' + state.stats.items + '개', state.stats.items * SCORE.perItem],
-    ['남은 멘탈 ' + state.mental, state.mental * SCORE.perMental],
-    ['걸린 턴 ' + state.turn, state.turn * SCORE.perTurn],
+    [t.score.clear, SCORE.clear],
+    [t.score.kills(state.stats.kills), state.stats.kills * SCORE.perKill],
+    [t.score.items(state.stats.items), state.stats.items * SCORE.perItem],
+    ['남은 ' + t.hp + ' ' + state.mental, state.mental * SCORE.perMental],
+    [t.score.turns(state.turn), state.turn * SCORE.perTurn],
   ];
 }
 
@@ -894,19 +896,16 @@ function finish(cleared) {
   updateHud();
   const best = saveBest(cleared ? 0 : state.floor);
   const overlay = document.getElementById('overlay');
-  document.getElementById('overlayTitle').textContent = cleared ? '퇴근 성공!' : '멘탈 붕괴…';
-  const late = state.overtime > 0
-    ? ' (야근 ' + ((state.overtime >= 60 ? Math.floor(state.overtime / 60) + '시간 ' : '')
-      + (state.overtime % 60 ? (state.overtime % 60) + '분' : '')).trim() + ')'
-    : ' (정시 퇴근!)';
+  const t = STAGE.text;
+  document.getElementById('overlayTitle').textContent = cleared ? t.win : t.lose;
   document.getElementById('result').textContent = cleared
-    ? '퇴근 시각 ' + clockText() + late
-    : state.floor + 'F 에서 쓰러졌다. (' + state.turn + '턴)';
+    ? t.winResult(clockText(), state.overtime)
+    : t.loseResult(state.floor, state.turn);
+  document.getElementById('restart').textContent = t.restart;
   recordRun(cleared, showScore(cleared));
   document.getElementById('perks').textContent = state.perks.length ? '받은 강화: ' + perksText() : '';
-  // 퇴근 성공이면 점수 쪽에 최고 점수가 나오므로 층 기록은 실패했을 때만
-  document.getElementById('best').textContent = cleared ? '' : '최고 기록: '
-    + (best === 0 ? '퇴근 성공' : best + 'F 까지');
+  // 성공이면 점수 쪽에 최고 점수가 나오므로 층 기록은 실패했을 때만
+  document.getElementById('best').textContent = cleared ? '' : t.best(best);
   overlayTimer = setTimeout(() => {
     overlay.className = cleared ? 'show scored' : 'show lose';
   }, 250);
@@ -934,7 +933,8 @@ function updateHud() {
   const throwBtn = document.getElementById('throwBtn');
   throwBtn.textContent = state.throwCd > 0 ? '던지기 ' + state.throwCd : '던지기';
   throwBtn.disabled = state.throwCd > 0;
-  document.getElementById('floor').textContent = state.floor + 'F';
+  document.getElementById('floor').textContent = STAGE.text.floorName(state.floor);
+  document.getElementById('hpLabel').textContent = STAGE.text.hp;
   const m = document.getElementById('mental');
   m.textContent = state.mental + '/' + state.stat.maxMental;
   const low = state.mental <= STAGE.hero.lowMental && !state.over;

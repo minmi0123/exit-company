@@ -219,6 +219,9 @@ const CLOCK = {
 // 탄 (스테이지) — 탄 하나에 필요한 것을 한 묶음으로. 게임은 지금 고른 탄(STAGE)만 본다
 //    새 탄은 위와 같은 표(적 · 층별 구성 · 아이템 · 강화 · 시계)를 따로 만들어 이 모양으로 묶고 STAGES 에 넣는다.
 //    open: false 면 탄 고르기 창에 "준비 중" 으로만 보인다
+//    requires: 'company' 면 그 탄을 한 번 깨야 열린다
+//    sprites: 바닥 · 벽 · 계단 · 출구 그림을 이 탄의 것으로 바꾼다 { floor: 'homeFloor' }
+//    아이템의 obj / subj: 이름이 받침으로 끝나면 '물 한 잔을' · '물 한 잔이' 를 따로 적는다 (없으면 '를' · '가')
 // ─────────────────────────────────────────────
 const COMPANY = {
   id: 'company',
@@ -234,7 +237,32 @@ const COMPANY = {
   boss: { kind: 'boss', floor: 1 }, // 이 층 출구 앞에 선다
   items: ITEM_TYPES,
   clock: CLOCK,
+  // 가구 배치 (칸 글자는 map.js 의 TILES). 같은 글자를 여러 번 넣으면 그만큼 자주 나온다
+  map: {
+    table: 'T',                               // 큰 방 한가운데 2x2 가구
+    pair: 'D',                                // 두 칸씩 나란히 놓는 가구
+    wallProps: ['P', 'P', 'C', 'W', 'S', 'S'], // 방 윗벽에 붙는 소품
+    sideProps: ['P', 'P', 'W', 'C'],           // 양옆 벽에 붙는 소품
+  },
+  // 이 탄에서 쓰는 말. game.js 는 여기서만 읽는다 (탄마다 체력 이름 · 장소 이름 · 이겼을 때 하는 말이 다르다)
   text: {
+    hp: '멘탈',                                   // 체력 이름: 화면 위 표시 · 피해/회복 메시지 · 점수표
+    floorName: (floor) => floor + 'F',            // 화면 위 장소 표시 · 기록
+    perkTitle: '계단에서 한숨 돌렸다',            // 강화 고르는 창 제목
+    defeat: (obj, boss) => obj + ' 먼저 퇴근시켰다' + (boss ? '!' : '.'),
+    clearBonus: '모두 퇴근시켰다! 보너스 강화: ', // 층의 적을 다 쓰러뜨렸을 때
+    floorItem: (item) => '사내 인맥으로 ' + item.name + '를 챙겼다.', // 강화 "사내 인맥"
+    bossWhere: '1F 출구',                         // 도감에 적는 보스 위치
+    win: '퇴근 성공!',
+    lose: '멘탈 붕괴…',
+    winResult: (clock, overtime) => '퇴근 시각 ' + clock + (overtime > 0
+      ? ' (야근 ' + ((overtime >= 60 ? Math.floor(overtime / 60) + '시간 ' : '')
+        + (overtime % 60 ? (overtime % 60) + '분' : '')).trim() + ')'
+      : ' (정시 퇴근!)'),
+    loseResult: (floor, turn) => floor + 'F 에서 쓰러졌다. (' + turn + '턴)',
+    best: (floor) => '최고 기록: ' + (floor === 0 ? '퇴근 성공' : floor + 'F 까지'), // 0 = 끝까지 깼다
+    restart: '야근하기',
+    score: { clear: '퇴근 성공', kills: (n) => '퇴근시킨 적 ' + n + '명', items: (n) => '모은 아이템 ' + n + '개', turns: (n) => '걸린 턴 ' + n },
     weapon: '키보드',
     thrown: '볼펜',
     throwWait: (turns) => '볼펜을 다시 집는 중… (' + turns + '턴)',
@@ -246,10 +274,7 @@ const COMPANY = {
   },
 };
 
-const STAGES = [
-  COMPANY,
-  { id: 'home', name: '2탄 · 집', desc: '넷플릭스 · 배달 · 숏폼 · 술… 쉬지 못하게 붙잡는 유혹들 (준비 중)', open: false },
-  { id: 'party', name: '3탄 · 회식', desc: '준비 중', open: false },
-];
+// 탄 목록 (탄 고르기 창에 이 순서로 나온다). 2탄부터는 탄마다 파일을 따로 두고 거기서 push 한다 (js/home.js)
+const STAGES = [COMPANY];
 
 let STAGE = COMPANY; // 지금 고른 탄

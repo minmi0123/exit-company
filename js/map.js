@@ -25,13 +25,31 @@ const TILES = {
     drink: {
       becomes: 'V',
       fullLine: '정수기다. 지금은 목이 안 마르다.',
-      line: (heal) => '정수기 물을 마셨다. 멘탈 +' + heal,
+      line: (heal, hp) => '정수기 물을 마셨다. ' + hp + ' +' + heal,
     } },
   V: { sprite: 'coolerEmpty', block: true },
   S: { sprite: 'shelf', block: true },
   '>': { sprite: 'stairs', stop: true, goal: 'stairs' },
   E: { sprite: 'exit', stop: true, goal: 'exit', noEnemy: true },
+  // 2탄 집 (소문자). 계단 · 출구는 같은 칸을 쓰고 그림만 문 · 침대로 바꾼다 (탄의 sprites)
+  s: { sprite: 'sofa', block: true },
+  t: { sprite: 'homeTable', block: true },
+  v: { sprite: 'tv', block: true },
+  p: { sprite: 'homePlant', block: true },
+  h: { sprite: 'homeShelf', block: true },
+  r: { sprite: 'fridge', block: true, stop: true,
+    drink: {
+      becomes: 'x',
+      fullLine: '냉장고다. 지금은 목이 안 마르다.',
+      line: (heal, hp) => '냉장고에서 탄산수를 꺼내 마셨다. ' + hp + ' +' + heal,
+    } },
+  x: { sprite: 'fridgeEmpty', block: true },
 };
+
+// 칸 그림 이름. 탄이 바꿔 둔 그림이 있으면 그걸 쓴다 (집: floor → homeFloor)
+function spriteName(name) {
+  return (STAGE.sprites && STAGE.sprites[name]) || name;
+}
 const STAIRS_TILE = '>';
 const EXIT_TILE = 'E';
 const BLOCKING = new Set(Object.keys(TILES).filter((t) => TILES[t].block));
@@ -158,10 +176,9 @@ function generateFloor(floorNo, rng) {
 
 // 가구 배치. 놓았을 때 걸어갈 수 있는 칸이 끊기면 되돌린다.
 // 시작점·계단 바로 옆은 비워 둔다 (1층 사장님은 출구 옆 빈칸에 선다)
-// 같은 글자를 여러 번 넣으면 그만큼 자주 나온다
-const WALL_PROPS = ['P', 'P', 'C', 'W', 'S', 'S']; // 방 윗벽에 붙는 소품
-const SIDE_PROPS = ['P', 'P', 'W', 'C'];           // 양옆 벽에 붙는 소품
+// 어떤 가구를 놓을지는 탄의 map 표에서 읽는다 (data.js · home.js)
 function furnish(grid, rooms, startRoom, start, goal, rng) {
+  const { table, pair, wallProps, sideProps } = STAGE.map;
   const near = (x, y, p) => Math.abs(x - p.x) + Math.abs(y - p.y) <= 1;
   const free = (x, y) => grid[y][x] === '.' && !near(x, y, start) && !near(x, y, goal);
   const place = (cells, ch) => {
@@ -184,7 +201,7 @@ function furnish(grid, rooms, startRoom, start, goal, rng) {
         for (let dy = -1; dy <= 2; dy++) {
           for (let dx = -1; dx <= 2; dx++) if (grid[y + dy][x + dx] !== '.') ringFree = false;
         }
-        if (ringFree && place([[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]], 'T')) break;
+        if (ringFree && place([[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]], table)) break;
       }
     }
 
@@ -195,7 +212,7 @@ function furnish(grid, rooms, startRoom, start, goal, rng) {
       for (let tries = 0; tries < pairs * 3 && placed < pairs; tries++) {
         const x = randInt(rng, r.x + 1, r.x + r.w - 3);
         const y = randInt(rng, r.y + 1, r.y + r.h - 2);
-        if (place([[x, y], [x + 1, y]], 'D')) placed++;
+        if (place([[x, y], [x + 1, y]], pair)) placed++;
       }
     }
 
@@ -207,7 +224,7 @@ function furnish(grid, rooms, startRoom, start, goal, rng) {
     const count = randInt(rng, 2, 4);
     for (let i = 0; i < count && wallSpots.length; i++) {
       const x = wallSpots.splice(randInt(rng, 0, wallSpots.length - 1), 1)[0];
-      place([[x, r.y]], WALL_PROPS[randInt(rng, 0, WALL_PROPS.length - 1)]);
+      place([[x, r.y]], wallProps[randInt(rng, 0, wallProps.length - 1)]);
     }
 
     // 양옆 벽: 화분 · 정수기 · 복사기를 한두 개
@@ -219,7 +236,7 @@ function furnish(grid, rooms, startRoom, start, goal, rng) {
     const sideCount = randInt(rng, 1, 2);
     for (let i = 0; i < sideCount && sideSpots.length; i++) {
       const cell = sideSpots.splice(randInt(rng, 0, sideSpots.length - 1), 1)[0];
-      place([cell], SIDE_PROPS[randInt(rng, 0, SIDE_PROPS.length - 1)]);
+      place([cell], sideProps[randInt(rng, 0, sideProps.length - 1)]);
     }
   }
 }

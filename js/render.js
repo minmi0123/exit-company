@@ -19,16 +19,16 @@ function spriteFor(x, y) {
   const t = tileAt(x, y);
   if (t !== '#') {
     // 칸 그림은 map.js 의 TILES 표에서 찾는다
-    const sprite = SPRITES[TILES[t].sprite];
+    const sprite = SPRITES[spriteName(TILES[t].sprite)];
     // 2x2 가구(회의 테이블)는 네 조각: 왼쪽/위가 같은 가구면 오른쪽/아래 조각
     if (Array.isArray(sprite)) return sprite[(tileAt(x - 1, y) === t ? 1 : 0) + (tileAt(x, y - 1) === t ? 2 : 0)];
     return sprite;
   }
   // 벽: 아래가 바닥이면 앞면, 주변에 바닥이 있으면 윗면, 아니면 안 그림
-  if (tileAt(x, y + 1) !== '#') return SPRITES.wall;
+  if (tileAt(x, y + 1) !== '#') return SPRITES[spriteName('wall')];
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
-      if (tileAt(x + dx, y + dy) !== '#') return SPRITES.wallTop;
+      if (tileAt(x + dx, y + dy) !== '#') return SPRITES[spriteName('wallTop')];
     }
   }
   return null;

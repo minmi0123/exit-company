@@ -123,7 +123,7 @@ window.addEventListener('keydown', (e) => {
       } else if (ok) {
         e.preventDefault();
         startGame();
-      } else if (stage && stage.open) {
+      } else if (stage && stageOpen(stage)) {
         e.preventDefault();
         startGame(false, stage);
       }
@@ -313,7 +313,7 @@ function bestText(stage = STAGE) {
   if (score !== null) return '최고 점수 ' + score + '점';
   const best = loadBest(stage);
   if (best === null) return '';
-  return '최고 기록: ' + (best === 0 ? '퇴근 성공' : best + 'F 까지');
+  return stage.text.best(best);
 }
 
 function showTitle() {
@@ -322,7 +322,7 @@ function showTitle() {
   document.getElementById('overlay').className = '';
   document.getElementById('msg').textContent = '';
   document.getElementById('titleSub').textContent = TITLE_SUB;
-  document.getElementById('titleBest').textContent = bestText();
+  document.getElementById('titleBest').textContent = bestText(STAGES[0]);
   renderScene(TITLE_FRAMES[titleFrame], titleArt);
   document.getElementById('title').className = 'show';
 }
@@ -357,6 +357,14 @@ function endIntro() {
   done();
 }
 
+// 지금 고를 수 있는 탄인가: 만들어졌고(open), 먼저 깨야 하는 탄(requires)을 깼다
+// 주소에 ?unlock 을 붙이면 조건 없이 열린다 (만드는 중에 바로 해 보려고)
+function stageOpen(stage) {
+  if (!stage.open) return false;
+  if (!stage.requires || params.has('unlock')) return true;
+  return loadBest(STAGES.find((s) => s.id === stage.requires)) === 0;
+}
+
 // 탄을 바꾼다: 그 탄의 아이템 버튼으로 갈아 끼운다 (나머지는 판을 시작할 때 STAGE 에서 읽는다)
 function setStage(stage) {
   if (stage === STAGE) return;
@@ -368,7 +376,9 @@ function setStage(stage) {
 function startGame(daily = false, stage = STAGES[0]) {
   closeDialog();
   if (intro) return;
-  playIntro(() => {
+  // 시작 연출은 사무실에서 걸어 나가는 그림이라 1탄에서만 보여 준다
+  const begin = stage === STAGES[0] ? playIntro : (done) => done();
+  begin(() => {
     state.screen = 'play';
     document.getElementById('title').className = '';
     setStage(stage);
@@ -464,7 +474,7 @@ function buildDex() {
   const stages = STAGES.filter((s) => s.open);
   fill('dexEnemies', 'dexEnemyCount', stages.flatMap((s) => Object.entries(s.enemies).map(([kind, t]) => [
     kind, SPRITES[kind].right[0], t.name,
-    [[AI_TAG[t.ai], 'tag'], [t.boss ? s.boss.floor + 'F 출구' : firstFloorOf(kind, s) + 'F 부터', 'tag where']], t.desc,
+    [[AI_TAG[t.ai], 'tag'], [t.boss ? s.text.bossWhere : s.text.floorName(firstFloorOf(kind, s)) + ' 부터', 'tag where']], t.desc,
   ])), 'enemies', '퇴근시킴');
   fill('dexItems', 'dexItemCount', stages.flatMap((s) => Object.entries(s.items).map(([kind, t]) => [
     kind, SPRITES[kind], t.name, [[t.tag, 'tag'], [t.key + ' 키', 'tag where']], t.desc,
@@ -488,7 +498,7 @@ function openDialog(id) {
 }
 
 // 탄 고르기 — data.js 의 STAGES 로 만든다. 열 때마다 최고 기록을 새로 읽는다
-// 오늘의 출근은 첫 탄 바로 아래에 둔다
+// 오늘의 출근은 맨 위에 둔다 (2026-10-11 기획자 요청)
 function buildStageList() {
   const list = document.getElementById('stageList');
   list.innerHTML = '';
@@ -513,15 +523,15 @@ function buildStageList() {
     list.append(btn);
     return btn;
   };
-  STAGES.forEach((stage, i) => {
-    button(stage.name, stage.open ? [stage.desc, bestText(stage)] : [stage.desc],
-      stage.open ? () => startGame(false, stage) : null);
-    if (i === 0) {
-      const d = loadDaily();
-      button('오늘의 출근 · ' + dayLabel(d.date),
-        ['오늘 하루는 누구나 같은 회사. 몇 번이든 다시 도전할 수 있다', dailyText(d)],
-        () => startGame(true)).id = 'stageDaily';
-    }
+  const d = loadDaily();
+  button('오늘의 출근 · ' + dayLabel(d.date),
+    ['오늘 하루는 누구나 같은 회사. 몇 번이든 다시 도전할 수 있다', dailyText(d)],
+    () => startGame(true)).id = 'stageDaily';
+  STAGES.forEach((stage) => {
+    const lines = [stage.desc];
+    if (stageOpen(stage)) lines.push(bestText(stage));
+    else if (stage.open) lines.push(STAGES.find((s) => s.id === stage.requires).name.split(' ')[0] + '을 깨면 열린다');
+    button(stage.name, lines, stageOpen(stage) ? () => startGame(false, stage) : null);
   });
 }
 
@@ -539,25 +549,31 @@ function dailyText(d) {
 }
 
 // 기록 — 열 때마다 저장된 값을 읽어 새로 만든다
+// (위쪽 표와 최근 판은 1탄 기록. 다른 탄은 최고 기록 한 줄씩 덧붙인다)
 function buildRecords() {
-  const rec = loadRecords();
+  const first = STAGES[0];
+  const clockOf1 = (overtime) => clockOf(overtime, first);
+  const rec = loadRecords(first);
   const dex = loadDex();
   const daily = loadDaily();
   const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
-  const best = loadBest();
-  const score = loadBestScore();
+  const best = loadBest(first);
+  const score = loadBestScore(first);
   const none = '—';
   const rows = [
     ['출근', rec.plays + '번'],
     ['퇴근 성공', rec.clears + '번' + (rec.plays ? ' (' + Math.min(100, Math.round(100 * rec.clears / rec.plays)) + '%)' : '')],
     ['최고 점수', score === null ? none : score + '점'],
-    ['가장 이른 퇴근', rec.bestOvertime === null ? none : clockOf(rec.bestOvertime) + (rec.bestOvertime === 0 ? ' 정시 퇴근!' : '')],
+    ['가장 이른 퇴근', rec.bestOvertime === null ? none : clockOf1(rec.bestOvertime) + (rec.bestOvertime === 0 ? ' 정시 퇴근!' : '')],
     ['가장 빠른 퇴근', rec.bestTurns === null ? none : rec.bestTurns + '턴'],
     ['가장 멀리 간 곳', best === null ? none : best === 0 ? '1F 로비 탈출' : best + 'F'],
     ['퇴근시킨 적', sum(dex.enemies) + '명'],
     ['먹은 아이템', sum(dex.items) + '개'],
     ['연속 출근', daily.streak ? daily.streak + '일 (오늘의 출근)' : none],
   ];
+  for (const stage of STAGES.slice(1)) {
+    if (stageOpen(stage)) rows.push([stage.name, bestText(stage).replace('최고 기록: ', '') || none]);
+  }
   const stats = document.getElementById('recordStats');
   stats.innerHTML = '';
   for (const [k, v] of rows) {
@@ -584,7 +600,7 @@ function buildRecords() {
     day.textContent = (Math.floor(r.date / 100) % 100) + '/' + (r.date % 100);
     const what = document.createElement('span');
     what.className = r.cleared ? 'win' : 'lose';
-    what.textContent = r.cleared ? clockOf(r.overtime) + ' 퇴근 성공' : r.floor + 'F 에서 멘탈 붕괴';
+    what.textContent = r.cleared ? clockOf1(r.overtime) + ' 퇴근 성공' : r.floor + 'F 에서 멘탈 붕괴';
     const detail = document.createElement('span');
     detail.className = 'detail';
     detail.textContent = (r.cleared ? r.score + '점' : r.turn + '턴') + (r.daily ? ' · 오늘의 출근' : '');

@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>회사에서 탈출하기</h1>
-  <div id="hud"><b id="floor">5F</b> · 멘탈 <b id="mental">20/20</b> · <b id="clock">18:00</b> · 적 <b id="enemiesLeft">0</b> · 아이템 <b id="itemsLeft">0</b><span id="status"></span></div>
+  <div id="hud"><b id="floor">5F</b> · <span id="hpLabel">멘탈</span> <b id="mental">20/20</b> · <b id="clock">18:00</b> · 적 <b id="enemiesLeft">0</b> · 아이템 <b id="itemsLeft">0</b><span id="status"></span></div>
 </header>
 
 <div id="stage">
@@ -19,7 +19,7 @@
     <div class="track"><div id="bossfill"></div></div>
   </div>
   <div id="perk">
-    <h2>계단에서 한숨 돌렸다</h2>
+    <h2 id="perkTitle"></h2>
     <p>하나를 골라 능력을 올리자</p>
     <div class="cards"></div>
   </div>
@@ -136,6 +136,7 @@
 
 <script src="js/sprites.js"></script>
 <script src="js/data.js"></script>
+<script src="js/home.js"></script>
 <script src="js/map.js"></script>
 <script src="js/sound.js"></script>
 <script src="js/game.js"></script>
