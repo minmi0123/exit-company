@@ -9,9 +9,11 @@
 <body>
 <header>
   <h1>회사에서 탈출하기</h1>
-  <div id="hud"><b id="floor">5F</b> · <span id="hpLabel">멘탈</span> <b id="mental">20/20</b> · <b id="clock">18:00</b> · 적 <b id="enemiesLeft">0</b> · 아이템 <b id="itemsLeft">0</b><span id="status"></span></div>
+  <div id="hud"><b id="floor">5F</b> · <span id="hpLabel">멘탈</span> <span class="hpbar" id="hpBar"><span id="hpFill"></span><b id="mental">20/20</b></span> · <b id="clock">18:00</b> · 적 <b id="enemiesLeft">0</b> · 아이템 <b id="itemsLeft">0</b><span id="status"></span></div>
 </header>
 
+<!-- stageArea 가 남는 높이를 다 차지하고, 그 안에서 게임 화면(stage)이 들어가는 만큼 세로로 길어진다 (js/render.js 의 fitCanvas) -->
+<div id="stageArea">
 <div id="stage">
   <canvas id="game"></canvas>
   <div id="bossbar">
@@ -34,6 +36,7 @@
     <button id="restart">야근하기</button>
   </div>
   <div id="title" class="show">
+    <h2 id="titleName">회사에서 탈출하기</h2>
     <canvas id="titleArt"></canvas>
     <p id="titleSub">오늘도 무사히 퇴근할 수 있을까?</p>
     <p id="titleBest"></p>
@@ -46,6 +49,7 @@
       <button id="settingsBtn" class="sub">환경설정</button>
     </div>
   </div>
+</div>
 </div>
 
 <div id="stages" class="dialog" role="dialog" aria-modal="true" aria-labelledby="stagesTitle">

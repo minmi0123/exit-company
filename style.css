@@ -8,7 +8,8 @@
 }
 * { box-sizing: border-box; }
 html { height: 100%; }
-body { margin: 0; min-height: 100%; }
+/* 화면 높이에 딱 맞춘다: 남는 높이는 게임 화면(#stageArea)이 다 가져간다 */
+body { margin: 0; height: 100vh; height: 100dvh; }
 body {
   background: var(--bg);
   color: var(--text);
@@ -34,9 +35,31 @@ header {
   gap: 4px 12px;
 }
 h1 { font-size: 18px; margin: 0; }
-#hud { color: var(--muted); font-size: 14px; }
+#hud { color: var(--muted); font-size: 14px; line-height: 1.5; }
 #hud b { color: var(--accent); font-weight: normal; }
-#hud b.low { color: var(--danger); }
+/* 체력 막대: 초록 → 절반 아래 노랑 → 위험하면 빨강. 숫자는 막대 위에 겹쳐 쓴다 */
+#hud .hpbar {
+  position: relative;
+  display: inline-block;
+  width: 96px;
+  height: 16px;
+  vertical-align: -3px;
+  background: #3a3544;
+  border-radius: 4px;
+  overflow: hidden;
+}
+#hpFill { position: absolute; inset: 0 auto 0 0; width: 100%; background: #4fa878; transition: width 0.15s; }
+#hud .hpbar.mid #hpFill { background: #c9981e; }
+#hud .hpbar.low #hpFill { background: #d9434a; }
+#hud .hpbar b {
+  position: relative;
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  line-height: 16px;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
 /* 시계: 21시까진 초록, 23시까진 노랑, 그 뒤 빨강. 00:00 이면 멈춰서 흔들린다 */
 #hud #clock.ok { color: #7fd6a8; }
 #hud #clock.late { color: var(--danger); }
@@ -49,14 +72,22 @@ h1 { font-size: 18px; margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   #hud #clock.midnight { animation: none; }
 }
-#stage {
-  position: relative;
+#stageArea {
+  flex: 1 1 0;
+  min-height: 0;
   width: 100%;
   max-width: 720px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+/* 게임 화면 크기는 js/render.js 의 fitCanvas 가 정한다 (가로 15칸 고정, 세로는 들어가는 만큼) */
+#stage {
+  position: relative;
+  flex: none;
 }
 #game {
   display: block;
-  width: 100%;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #000;
@@ -169,47 +200,42 @@ h1 { font-size: 18px; margin: 0; }
   border: 0;
   border-radius: 8px;
 }
-/* 시작화면 — 스테이지를 덮는다 (결과 화면보다 위) */
+/* 시작화면 — 화면 전체를 덮는다 (게임 화면 · 아이템 버튼 · 방향 패드까지 가린다. 창보다는 아래)
+   2026-10-11: 게임 화면 틀 안에만 있어서 아래에 아이템 버튼과 패드가 비쳐 보였다 */
 #title {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  z-index: 5;
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  justify-content: safe center;
+  gap: 10px;
+  overflow-y: auto;
   background: var(--bg);
-  border: 2px solid var(--panel);
   text-align: center;
-  padding: 8px 16px;
+  padding: 16px;
 }
 #title.show { display: flex; }
+#titleName { margin: 0 0 6px; font-size: 26px; color: var(--accent); font-weight: normal; }
 #titleArt {
-  width: min(58%, 336px);
+  width: min(88%, 420px, 60vh); /* 가로로 누운 화면에서는 높이에 맞춰 줄인다 */
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  border: 2px solid var(--panel);
 }
-#title p { margin: 0; font-size: 14px; }
-#titleBest { color: var(--muted); font-size: 12px !important; min-height: 1em; }
+#title p { margin: 0; font-size: 15px; }
+#titleBest { color: var(--muted); font-size: 13px !important; min-height: 1em; }
 /* 첫 줄: 퇴근하기(크게) + 상점. 나머지 넷은 그 아래 한 줄에 */
-#title .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 4px; width: min(100%, 340px); }
+#title .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; width: min(100%, 400px); }
 #title #startBtn { grid-column: 1 / 4; }
-#title #shopBtn { font-size: 15px; }
-#title button.sub { padding: 8px 2px; font-size: 13px; white-space: nowrap; }
+#title #shopBtn { font-size: 16px; }
+#title button.sub { padding: 12px 2px; font-size: 13px; white-space: nowrap; }
 /* 시작 연출 중엔 그림과 한 줄만 남긴다 (자리는 그대로 둬서 그림이 움직이지 않게) */
 #title.leaving .buttons, #title.leaving #titleBest { visibility: hidden; }
-/* 폰: 스테이지가 낮아서(가로의 11/15) 그림과 버튼을 줄여야 다 들어간다 */
-@media (max-width: 480px) {
-  #title { gap: 4px; padding: 4px 12px; }
-  #titleArt { width: 44%; }
-  #title p { font-size: 13px; }
-  #title .buttons { margin-top: 2px; }
-  #title button { padding: 7px 16px; font-size: 15px; }
-  #title button.sub { padding: 6px 2px; font-size: 12px; }
-}
 #title button {
-  padding: 10px 16px;
-  font-size: 16px;
+  padding: 16px;
+  font-size: 18px;
   font-family: inherit;
   background: var(--accent);
   color: #1d1a22;
@@ -354,11 +380,21 @@ h1 { font-size: 18px; margin: 0; }
 .dialog .recent .win { color: #7fd6a8; }
 .dialog .recent .lose { color: var(--danger); }
 .dialog .recent .detail { color: var(--muted); margin-left: auto; }
+/* 높이를 고정한다: 메시지 줄 수가 바뀔 때마다 게임 화면 크기가 출렁이지 않게. 넘치면 스크롤 */
 #msg {
   margin: 0;
-  min-height: 1.4em;
+  height: 2.8em;
+  line-height: 1.4;
+  overflow-y: auto;
   font-size: 14px;
   color: var(--text);
+}
+/* 폰: 게임 중엔 제목을 빼고 그 자리를 게임 화면에 준다 (제목은 시작화면에 있다). 글이 좁아 줄이 더 필요하다 */
+@media (max-width: 480px) {
+  body { padding: 8px 12px; gap: 8px; }
+  h1 { display: none; }
+  #hud { width: 100%; min-height: 3em; }
+  #msg { height: 4.2em; }
 }
 #items {
   width: 100%;
@@ -414,7 +450,7 @@ h1 { font-size: 18px; margin: 0; }
 #status b.bad { color: var(--danger); }
 /* 방향키는 화면 맨 아래로 — 엄지가 닿는 자리 */
 #pad {
-  margin-top: auto;
+  flex: none;
   padding-bottom: env(safe-area-inset-bottom);
   display: grid;
   grid-template-columns: repeat(3, 64px);

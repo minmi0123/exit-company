@@ -4,8 +4,10 @@
 // ─────────────────────────────────────────────
 // 8. 그리기 — 주인공을 따라가는 카메라
 // ─────────────────────────────────────────────
-const VIEW_W = 15;
-const VIEW_H = 11;
+const VIEW_W = 15;          // 가로로 보이는 칸 (고정)
+const MIN_VIEW_H = 9;       // 세로로 보이는 칸은 화면에 들어가는 만큼: 폰을 세로로 들면 많이 보인다
+const MAX_VIEW_H = 20;
+let VIEW_H = 11;
 const MOVE_MS = 100;    // 한 칸 이동 연출 시간
 const POPUP_MS = 600;   // 피해 숫자 표시 시간
 const SHOT_MS = 180;    // 서류가 날아가는 시간
@@ -14,6 +16,26 @@ canvas.width = VIEW_W * TILE;
 canvas.height = VIEW_H * TILE;
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
+
+// 게임 화면 크기 맞추기: 가로 15칸이 폭에 꽉 차게 하고, 남는 높이만큼 세로 칸 수를 늘린다.
+// 가로로 누운 화면처럼 높이가 모자라면 최소 칸 수가 들어가도록 한 칸 크기를 줄인다
+const stageArea = document.getElementById('stageArea');
+
+function fitCanvas() {
+  const w = stageArea.clientWidth;
+  const h = stageArea.clientHeight;
+  if (!w || !h) return;
+  const tile = Math.min(w / VIEW_W, h / MIN_VIEW_H);
+  const rows = clamp(Math.floor(h / tile), MIN_VIEW_H, MAX_VIEW_H);
+  canvas.style.width = Math.floor(VIEW_W * tile) + 'px';
+  canvas.style.height = Math.floor(rows * tile) + 'px';
+  if (rows === VIEW_H) return;
+  VIEW_H = rows;
+  canvas.height = VIEW_H * TILE; // 크기를 바꾸면 캔버스 설정이 초기화된다
+  ctx.imageSmoothingEnabled = false;
+}
+new ResizeObserver(fitCanvas).observe(stageArea);
+fitCanvas();
 
 function spriteFor(x, y) {
   const t = tileAt(x, y);

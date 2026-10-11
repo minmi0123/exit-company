@@ -983,6 +983,11 @@ function updateHud() {
   m.textContent = state.mental + '/' + state.stat.maxMental;
   const low = state.mental <= STAGE.hero.lowMental && !state.over;
   m.className = state.mental <= STAGE.hero.lowMental ? 'low' : '';
+  // 체력 막대: 남은 만큼 채우고, 절반 아래면 노랑 · 위험하면 빨강
+  const ratio = Math.max(0, Math.min(1, state.mental / state.stat.maxMental));
+  document.getElementById('hpFill').style.width = (100 * ratio) + '%';
+  document.getElementById('hpBar').className = 'hpbar'
+    + (state.mental <= STAGE.hero.lowMental ? ' low' : ratio <= 0.5 ? ' mid' : '');
   document.getElementById('stage').classList.toggle('danger', low);
   setAlarm(low && state.screen === 'play');
 
