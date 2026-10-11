@@ -17,19 +17,13 @@ ctx.imageSmoothingEnabled = false;
 
 function spriteFor(x, y) {
   const t = tileAt(x, y);
-  if (t === '.') return SPRITES.floor;
-  if (t === 'D') return SPRITES.desk;
-  if (t === 'T') {
-    // 회의 테이블 조각: 왼쪽/위가 테이블이면 오른쪽/아래 조각
-    return SPRITES.meeting[(tileAt(x - 1, y) === 'T' ? 1 : 0) + (tileAt(x, y - 1) === 'T' ? 2 : 0)];
+  if (t !== '#') {
+    // 칸 그림은 map.js 의 TILES 표에서 찾는다
+    const sprite = SPRITES[TILES[t].sprite];
+    // 2x2 가구(회의 테이블)는 네 조각: 왼쪽/위가 같은 가구면 오른쪽/아래 조각
+    if (Array.isArray(sprite)) return sprite[(tileAt(x - 1, y) === t ? 1 : 0) + (tileAt(x, y - 1) === t ? 2 : 0)];
+    return sprite;
   }
-  if (t === 'P') return SPRITES.plant;
-  if (t === 'C') return SPRITES.copier;
-  if (t === 'W') return SPRITES.cooler;
-  if (t === 'V') return SPRITES.coolerEmpty;
-  if (t === 'S') return SPRITES.shelf;
-  if (t === '>') return SPRITES.stairs;
-  if (t === 'E') return SPRITES.exit;
   // 벽: 아래가 바닥이면 앞면, 주변에 바닥이 있으면 윗면, 아니면 안 그림
   if (tileAt(x, y + 1) !== '#') return SPRITES.wall;
   for (let dy = -1; dy <= 1; dy++) {
@@ -143,9 +137,9 @@ function draw() {
     ctx.drawImage(SPRITES[it.kind], it.x * TILE, it.y * TILE + bob);
   }
 
-  const enemyPos = state.enemies.map((e) => drawWalker(SPRITES[e.kind], e, now, e.type.ai === 'boss' ? 2 : 1));
-  // 연차 중에는 깜빡인다
-  if (state.annualTurns > 0 && Math.floor(now / 120) % 2) ctx.globalAlpha = 0.4;
+  const enemyPos = state.enemies.map((e) => drawWalker(SPRITES[e.kind], e, now, e.type.scale || 1));
+  // 무적(연차) 중에는 깜빡인다
+  if (activeBuff('invincible') && Math.floor(now / 120) % 2) ctx.globalAlpha = 0.4;
   // 맞았을 때: 좌우로 2px 흔들리다 잦아든다
   const hitT = h.hitAt ? (now - h.hitAt) / HIT_MS : 1;
   const hitDx = hitT < 1 ? Math.round(Math.sin(hitT * Math.PI * 6) * 2 * (1 - hitT)) : 0;
@@ -170,7 +164,7 @@ function draw() {
   // 체력 막대 · "!" 는 캐릭터 위에 덮어 그린다 (주인공에 가려지지 않게)
   state.enemies.forEach((e, i) => {
     const p = enemyPos[i];
-    if (e.type.ai === 'boss') {
+    if (e.type.boss) {
       // 체력은 화면 위 큰 막대. 다음 턴에 행동할 차례면 머리 위 빨간 "!" (예고)
       // 2배 그림의 오른쪽 위 빈 곳 (머리 위에 두면 맨 윗줄에서 화면 밖으로 나간다)
       if (e.started && e.busy === bossActEvery(e) - 1) {
@@ -195,11 +189,12 @@ function draw() {
     }
     const px = Math.round(p.x);
     const py = Math.round(p.y);
-    // 머리 위 표시: 상사는 평소 음표(노래 듣는 중), 방금 부른 직후엔 "!"
-    const calling = e.type.ai === 'wander' && e.cooldown > e.type.callCooldown - 3;
-    if (e.type.ai === 'wander' && !calling) {
+    // 머리 위 표시: idleMark 가 있는 적(상사)은 평소 그 표시(음표 = 노래 듣는 중), 방금 부른 직후엔 "!"
+    const mark = e.type.idleMark;
+    const calling = mark && e.cooldown > e.type.callCooldown - 3;
+    if (mark && !calling) {
       const bob = Math.floor(now / 300) % 2;
-      drawPixelText('♪', px + 10, py - 5 - bob, '#bcdcf2');
+      drawPixelText(mark, px + 10, py - 5 - bob, '#bcdcf2');
     } else if ((e.awake || calling) && e.hp === e.maxHp) {
       ctx.fillStyle = '#ffe27a';
       ctx.fillRect(px + 7, py - 5, 2, 3);

@@ -10,21 +10,25 @@ function randomSeed() {
   return Math.floor(Math.random() * 1e9);
 }
 
+// 가방: 지금 탄의 아이템 종류마다 0개에서 시작 { coffee: 0, annual: 0, half: 0 }
+function emptyBag() {
+  return Object.fromEntries(Object.keys(STAGE.items).map((kind) => [kind, 0]));
+}
+
 const state = {
   seed: 0,
   turn: 0,
-  floor: TOP_FLOOR,
-  mental: HERO.maxMental,
-  stat: { ...HERO },  // 이번 판 능력치 (강화로 바뀐다)
+  floor: STAGE.topFloor,
+  mental: STAGE.hero.maxMental,
+  stat: { ...STAGE.hero },  // 이번 판 능력치 (강화로 바뀐다)
   perks: [],          // 받은 강화 이름
   choosing: false,    // 계단에서 강화를 고르는 중
   map: null,
   enemies: [],
   items: [],          // 바닥에 떨어진 아이템
-  bag: { coffee: 0, annual: 0, half: 0 },
-  annualTurns: 0,     // 연차: 남은 무적 턴
-  halfTurns: 0,       // 반차: 공격력이 오른 남은 턴
-  grab: null,         // 팀장님에게 붙잡힘 { by: 팀장님, turns: 남은 턴 }
+  bag: emptyBag(),
+  buffs: {},          // 쓴 아이템의 남은 효과 턴 { annual: 3 } — 무적·공격력 같은 효과는 아이템 표에서 읽는다
+  grab: null,         // 붙잡힘 { by: 붙잡은 적, turns: 남은 턴 }
   overtime: 0,        // 퇴근 시간이 밀린 분 (18:00 + overtime)
   over: false,        // 퇴근 성공 또는 멘탈 붕괴
   screen: 'title',    // title(시작화면) · play(게임 중). 결과 화면은 play + over
@@ -50,10 +54,13 @@ function enterFloor(floorNo) {
   state.grab = null;
   state.popups = [];
   state.shots = [];
-  say(floorNo === 1
-    ? '1F 로비. 그런데 사장님이 출구를 막고 있다! 지금 ' + clockText() + '.'
-    : floorNo + 'F. 계단으로 내려가자. 모두 퇴근시키면 강화 보너스!');
+  say(STAGE.text.floorIntro(floorNo, clockText()));
   updateHud();
+}
+
+// 지금 걸려 있는 아이템 효과 중 flag(invincible · power) 를 가진 것의 종류. 없으면 undefined
+function activeBuff(flag) {
+  return Object.keys(state.buffs).find((kind) => state.buffs[kind] > 0 && STAGE.items[kind][flag]);
 }
 
 // 계단: 강화 두 장을 보여 주고, 고르면 다음 층으로
@@ -79,7 +86,7 @@ function offerPerks() {
 
 // 강화 후보 (더 받아도 소용없는 건 뺀다)
 function perkPool() {
-  return PERKS.filter((p) => !p.available || p.available(state.stat));
+  return STAGE.perks.filter((p) => !p.available || p.available(state.stat));
 }
 
 function applyPerk(p) {
@@ -114,11 +121,11 @@ function choosePerk(p) {
 
 // 사내 인맥: 층 시작마다 무작위 아이템
 function giveFloorItems() {
-  const kinds = Object.keys(ITEM_TYPES);
+  const kinds = Object.keys(STAGE.items);
   for (let i = 0; i < state.stat.floorItems; i++) {
     const kind = kinds[Math.floor(state.rng() * kinds.length)];
     state.bag[kind] += 1;
-    say('사내 인맥으로 ' + ITEM_TYPES[kind].name + '를 챙겼다.');
+    say('사내 인맥으로 ' + STAGE.items[kind].name + '를 챙겼다.');
   }
 }
 
@@ -137,22 +144,21 @@ function newRun(seed = randomSeed(), daily = false) {
   state.rng = mulberry32(seed ^ 0x5eed);
   document.getElementById('seed').textContent = daily ? '오늘의 출근 ' + dayLabel(seed) : '시드 ' + seed;
   state.turn = 0;
-  state.stat = { ...HERO };
+  state.stat = { ...STAGE.hero };
   state.perks = [];
   state.choosing = false;
   document.getElementById('perk').className = '';
-  state.mental = HERO.maxMental;
-  state.bag = { coffee: 0, annual: 0, half: 0 };
-  state.annualTurns = 0;
+  state.mental = STAGE.hero.maxMental;
+  state.bag = emptyBag();
+  state.buffs = {};
   state.throwCd = 0;
   state.overtime = 0;
-  state.clockTurns = 0;   // 사장님 없이 흐른 턴 (시계용)
+  state.clockTurns = 0;   // 보스 없이 흐른 턴 (시계용)
   state.stats = { kills: 0, items: 0 };
-  state.halfTurns = 0;
   state.over = false;
   clearTimeout(overlayTimer);
   document.getElementById('overlay').className = '';
-  enterFloor(TOP_FLOOR);
+  enterFloor(STAGE.topFloor);
 }
 
 function tileAt(x, y) {
@@ -167,7 +173,7 @@ function enemyAt(x, y) {
 // 적이 설 수 없는 칸 (출구 문 위에 서면 영영 못 나가므로 출구도 막는다)
 function occupied(x, y) {
   return BLOCKING.has(tileAt(x, y))
-    || tileAt(x, y) === 'E'
+    || TILES[tileAt(x, y)].noEnemy
     || enemyAt(x, y)
     || (state.hero.x === x && state.hero.y === y);
 }
@@ -175,15 +181,17 @@ function occupied(x, y) {
 // 1층 로비 문은 그 층의 적을 모두 퇴근시켜야 열린다. 열려 있으면 null
 // 계단은 언제나 열려 있다 — 대신 그 층 적을 다 퇴근시키면 강화 보너스 (2026-10)
 function lockedMessage(t) {
-  if (t !== 'E') return null;
-  if (bossAlive()) return '로비 문이 잠겨 있다. 사장님: "퇴근? 누가?"';
+  if (TILES[t].goal !== 'exit') return null;
+  const boss = findBoss();
+  if (boss) return boss.type.lockLine;
   const n = state.enemies.length;
   if (n === 0) return null;
-  return '로비 문이 잠겨 있다. 남은 적 ' + n + '명을 먼저 퇴근시키자.';
+  return STAGE.text.exitLocked(n);
 }
 
-function bossAlive() {
-  return state.enemies.some((e) => e.type.ai === 'boss');
+// 살아 있는 보스 (없으면 undefined)
+function findBoss() {
+  return state.enemies.find((e) => e.type.boss);
 }
 
 function clockText() {
@@ -192,7 +200,7 @@ function clockText() {
 
 // 야근한 분 → 시각 ("21:30")
 function clockOf(overtime) {
-  const m = 18 * 60 + overtime;
+  const m = STAGE.clock.start + overtime;
   return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 }
 
@@ -225,25 +233,26 @@ function act(dir) {
     const nx = h.x + dx;
     const ny = h.y + dy;
     const target = enemyAt(nx, ny);
+    const drink = TILES[tileAt(nx, ny)].drink;
     if (target && state.grab && state.grab.by === target) {
-      // 붙잡은 팀장님은 때릴 수 없다 — 버티거나 연차·반차로 빠져나온다
+      // 붙잡은 적은 때릴 수 없다 — 버티거나 탈출 아이템으로 빠져나온다
       state.shake = 4;
-      say('팀장님한테 손을 댈 순 없다… (연차·반차로 탈출)');
+      say(target.type.holdAttackLine);
     } else if (target) {
       sfx('attack');
       heroAttack(target);
-    } else if (tileAt(nx, ny) === 'W') {
+    } else if (drink) {
       // 정수기: 부딪히면 한 번 마신다 (턴을 쓴다). 멘탈이 꽉 차 있으면 아껴 둔다
       if (state.mental >= state.stat.maxMental) {
         state.shake = 6;
-        say('정수기다. 지금은 목이 안 마르다.');
+        say(drink.fullLine);
         return;
       }
-      state.map.grid[ny][nx] = 'V';
+      state.map.grid[ny][nx] = drink.becomes;
       const heal = state.stat.coolerHeal + state.stat.healBonus;
       state.mental = Math.min(state.stat.maxMental, state.mental + heal);
       sfx('drink');
-      say('정수기 물을 마셨다. 멘탈 +' + heal);
+      say(drink.line(heal));
     } else if (BLOCKING.has(tileAt(nx, ny))) {
       state.shake = 6; // 막힘: 턴을 소모하지 않는다
       return;
@@ -254,7 +263,7 @@ function act(dir) {
     } else if (state.grab) {
       // 붙잡힌 동안: 이동은 못 하지만 턴은 흐른다 (다른 적 공격·아이템은 가능)
       state.shake = 4;
-      say('팀장님이 놓아주지 않는다… (연차·반차로 탈출)');
+      say(state.grab.by.type.holdMoveLine);
     } else {
       moveUnit(h, nx, ny);
       sfx('step', h.step);
@@ -301,14 +310,14 @@ function throwPen() {
   if (state.over || state.choosing || state.screen !== 'play') return;
   beginAction();
   if (state.throwCd > 0) {
-    say('볼펜을 다시 집는 중… (' + state.throwCd + '턴)');
+    say(STAGE.text.throwWait(state.throwCd));
     return;
   }
   const h = state.hero;
   const target = throwTarget();
   if (!target) {
     say(state.grab
-      ? '팀장님 말고는 맞힐 사람이 없다… (연차·반차로 탈출)'
+      ? state.grab.by.type.holdThrowLine
       : state.stat.throwRange + '칸 안, 같은 줄에 보이는 적이 없다.');
     return;
   }
@@ -316,19 +325,19 @@ function throwPen() {
   state.shots.push({ fromX: h.x, fromY: h.y, toX: target.x, toY: target.y, start: performance.now(), pen: true });
   state.throwCd = state.stat.throwCooldown;
   sfx('throw');
-  heroAttack(target, state.stat.throwDamage, '볼펜');
+  heroAttack(target, state.stat.throwDamage, STAGE.text.thrown);
   endHeroAction();
 }
 
 // 주인공 행동 뒤 공통 처리: 계단/출구 → 턴 경과 → 적 행동
 function endHeroAction() {
   const h = state.hero;
-  const here = tileAt(h.x, h.y);
-  if (here === '>') {
+  const goal = TILES[tileAt(h.x, h.y)].goal;
+  if (goal === 'stairs') {
     offerPerks();
     return;
   }
-  if (here === 'E') {
+  if (goal === 'exit') {
     finish(true);
     return;
   }
@@ -337,54 +346,51 @@ function endHeroAction() {
   clockTick();
 
   enemiesAct();
-  if (state.annualTurns > 0) state.annualTurns -= 1;
-  if (state.halfTurns > 0) state.halfTurns -= 1;
+  for (const kind of Object.keys(state.buffs)) {
+    if (state.buffs[kind] > 0) state.buffs[kind] -= 1;
+  }
   if (state.throwCd > 0) state.throwCd -= 1;
   updateHud();
 }
 
-// 시계: 5층 18:00 부터. CLOCK.every 턴마다 30분, 00:00 이 되면 멈춘다 (판 전체로 이어진다)
-// 75턴 = 2026-10 플레이 기록(2층 중간 526턴)으로 맞춤. 한 판 ~750턴이면 23시쯤 퇴근
-const CLOCK = {
-  every: 75,
-  step: 30,
-  max: 6 * 60,        // 18:00 + 6시간 = 00:00
-};
-
+// 시계 (수치는 data.js 의 CLOCK): every 턴마다 step 분, max 가 되면 멈춘다 (판 전체로 이어진다)
 function clockTick() {
-  if (state.overtime >= CLOCK.max) return;
-  const boss = state.enemies.find((e) => e.type.ai === 'boss');
+  const clock = STAGE.clock;
+  if (state.overtime >= clock.max) return;
+  const boss = findBoss();
   if (boss && boss.awake) {
-    overtimeTick(boss); // 사장님을 만나면 시계가 빨라진다
+    overtimeTick(boss); // 보스를 만나면 시계가 빨라진다
     return;
   }
   state.clockTurns += 1;
-  if (state.clockTurns % (CLOCK.every + state.stat.clockSlow) !== 0) return;
+  if (state.clockTurns % (clock.every + state.stat.clockSlow) !== 0) return;
   addOvertime('');
 }
 
 function addOvertime(note) {
-  state.overtime = Math.min(CLOCK.max, state.overtime + CLOCK.step);
-  if (state.overtime >= CLOCK.max) {
-    say('00:00. 막차가 끊겼다… 시계는 더 이상 보지 않기로 했다.' + note);
+  const clock = STAGE.clock;
+  state.overtime = Math.min(clock.max, state.overtime + clock.step);
+  if (state.overtime >= clock.max) {
+    say(clock.midnightLine + note);
   } else {
     say('벌써 ' + clockText() + '.' + note);
   }
 }
 
-// 1층: 사장님이 나를 알아챈 뒤부터 퇴근 시간이 밀리고, 밀릴수록 사장님이 세진다
+// 보스가 나를 알아챈 뒤부터 퇴근 시간이 밀리고, 밀릴수록 보스가 세진다
 // (걸어가는 동안까지 세면 만나기 전에 이미 최대로 세져서 못 이긴다 — 2026-09-30 시뮬레이션)
 function overtimeTick(boss) {
+  const t = boss.type;
   boss.awakeTurns = (boss.awakeTurns || 0) + 1;
-  if (boss.awakeTurns % BOSS.overtimeEvery !== 0) return;
+  if (boss.awakeTurns % t.overtimeEvery !== 0) return;
   let note = '';
   if (state.stat.overtimeImmune) {
-    note = ' (야근 면역: 사장님 공격력 그대로)';
-  } else if (boss.bonus < BOSS.overtimeMaxBonus) {
+    note = t.overtimeImmuneLine;
+  } else if (boss.bonus < t.overtimeMaxBonus) {
     boss.bonus += 1;
-    note = ' 사장님 공격력 +1';
+    note = t.overtimeUpLine;
   }
-  addOvertime(' 사장님이 퇴근 시간을 밀었다.' + note);
+  addOvertime(t.overtimeLine + note);
 }
 
 function pickUp() {
@@ -396,60 +402,59 @@ function pickUp() {
   state.stats.items += 1;
   recordDex('items', item.kind);
   sfx('item');
-  const type = ITEM_TYPES[item.kind];
+  const type = STAGE.items[item.kind];
   say(type.name + '를 주웠다. (' + type.key + '번으로 사용)');
 }
 
+// 아이템 효과는 data.js 의 아이템 표(heal · turns · escape …)대로 적용한다
 function useItem(kind) {
   if (state.over || state.choosing || state.screen !== 'play') return;
   beginAction();
+  const type = STAGE.items[kind];
   if (state.bag[kind] <= 0) {
-    say(ITEM_TYPES[kind].name + '가 없다.');
+    say(type.name + '가 없다.');
     return; // 턴을 쓰지 않는다
   }
   state.bag[kind] -= 1;
   const h = state.hero;
-  const type = ITEM_TYPES[kind];
-  if (kind === 'coffee') {
+  if (type.heal) {
     const before = state.mental;
     state.mental = Math.min(state.stat.maxMental, state.mental + type.heal + state.stat.healBonus);
     popup(h.x, h.y, '+' + (state.mental - before), '#7fd6a8');
-    say('커피를 마셨다. 정신이 든다.');
-  } else if (kind === 'annual') {
-    state.annualTurns = type.turns;
-    say('연차를 냈다! ' + type.turns + '턴 동안 아무도 나를 건드릴 수 없다.');
-  } else if (kind === 'half') {
-    state.halfTurns = type.turns;
-    say('반차를 냈다! 오전에 몰아서 끝낸다 — ' + type.turns + '턴 동안 공격력 ' + type.power + '배.');
   }
-  // 연차·반차 = 회식 탈출
-  if (kind !== 'coffee' && state.grab) {
-    state.grab.by.cooldown = state.grab.by.type.grabCooldown;
+  if (type.turns) state.buffs[kind] = type.turns;
+  say(typeof type.useLine === 'function' ? type.useLine(type) : type.useLine);
+  // 탈출 아이템: 붙잡혀 있으면 빠져나온다
+  if (type.escape && state.grab) {
+    const by = state.grab.by;
+    by.cooldown = by.type.grabCooldown;
     state.grab = null;
-    say('회식에서 빠져나왔다!');
+    say(by.type.escapeLine);
   }
   endHeroAction();
 }
 
-function heroAttack(e, dmg = state.stat.attack, weapon = '키보드') {
-  // 반차 중: 공격력 1.5배 (올림 — 내림이면 3 → 4 라 세진 게 잘 안 느껴진다)
-  const boosted = state.halfTurns > 0;
-  if (boosted) dmg = Math.ceil(dmg * ITEM_TYPES.half.power);
+function heroAttack(e, dmg = state.stat.attack, weapon = STAGE.text.weapon) {
+  // 공격력 배수 효과 중 (반차 1.5배). 올림 — 내림이면 3 → 4 라 세진 게 잘 안 느껴진다
+  const boost = activeBuff('power');
+  if (boost) dmg = Math.ceil(dmg * STAGE.items[boost].power);
   e.hp -= dmg;
-  popup(e.x, e.y, '-' + dmg, boosted ? '#ff9f43' : '#ffe27a');
+  popup(e.x, e.y, '-' + dmg, boost ? '#ff9f43' : '#ffe27a');
   if (e.hp <= 0) {
     removeEnemy(e);
     return;
   }
   say(weapon + '로 ' + e.type.short + '에게 ' + dmg + ' 피해.');
-  if (e.type.ai === 'boss' && !e.enraged && e.hp <= e.maxHp * BOSS.enrageAt) {
+  // 분노: 체력이 enrageAt 비율 아래로 떨어지면 매 턴 움직인다
+  if (e.type.enrageAt && !e.enraged && e.hp <= e.maxHp * e.type.enrageAt) {
     e.enraged = true;
     e.busy = 0;
     state.shake = 8;
-    say('사장님이 넥타이를 풀었다! "오늘 아무도 못 가!" 이제 매 턴 움직인다.');
+    say(e.type.enrageLine);
     return;
   }
-  if (e.type.ai === 'wander') sangsaCall(e); // 맞으면 알아채고 부른다
+  const ai = ENEMY_AI[e.type.ai];
+  if (ai.onHit) ai.onHit(e); // 맞았을 때 따로 하는 행동이 있는 적
   else e.awake = true;
 }
 
@@ -458,18 +463,16 @@ function removeEnemy(e) {
   state.stats.kills += 1;
   recordDex('enemies', e.kind);
   if (state.grab && state.grab.by === e) state.grab = null;
-  if (e.type.ai === 'boss') {
-    say('사장님을 먼저 퇴근시켰다!');
-  } else if (e.type.ai === 'wander') {
-    // 상사: 쓰러지면서 일을 떠넘긴다 → 남은 적 공격력 상승 (쓰러뜨린 상사 수만큼 쌓인다)
-    for (const o of state.enemies) o.bonus += SANGSA_DEATH_BUFF;
+  if (e.type.deathBuff) {
+    // 쓰러지면서 일을 떠넘긴다 → 남은 적 공격력 상승 (쓰러뜨린 수만큼 쌓인다)
+    for (const o of state.enemies) o.bonus += e.type.deathBuff;
     const leave = e.type.leaveLines[Math.floor(state.rng() * e.type.leaveLines.length)];
-    say(e.type.obj + ' 먼저 퇴근시켰다. ' + leave + ' 일을 떠넘기고 갔다! 남은 적 공격력 +' + SANGSA_DEATH_BUFF);
+    say(e.type.obj + ' 먼저 퇴근시켰다. ' + leave + ' ' + e.type.deathBuffLine + e.type.deathBuff);
   } else {
-    say(e.type.obj + ' 먼저 퇴근시켰다.');
+    say(e.type.obj + ' 먼저 퇴근시켰다' + (e.type.boss ? '!' : '.'));
   }
   if (state.enemies.length === 0) {
-    if (state.floor === 1) say('모두 퇴근했다. 로비 문이 열렸다!');
+    if (state.floor === 1) say(STAGE.text.exitOpen);
     else clearBonus();
   }
 }
@@ -491,22 +494,30 @@ function enemiesAct() {
     const d = toHero[e.y][e.x];
     const adjacent = Math.abs(e.x - h.x) + Math.abs(e.y - h.y) === 1;
 
-    if (e.type.ai === 'wander') {
-      sangsaTurn(e, d);
-      continue;
-    }
+    // sight 가 없는 적(돌아다니는 상사)은 거리로는 알아채지 않는다
     if (!e.awake && d >= 0 && d <= e.type.sight) e.awake = true;
 
-    let acted = false;
-    if (e.type.ai === 'boss') acted = bossTurn(e, adjacent);
-    else if (e.type.ai === 'grab') acted = leaderTurn(e, adjacent);
-    else if (e.type.ai === 'ranged') acted = clientTurn(e);
-    else if (adjacent) {
-      hurtHero(e, attackOf(e), pickLine(e));
-      acted = true;
-    }
+    const acted = ENEMY_AI[e.type.ai].act(e, adjacent, d);
     if (!acted && e.awake) chase(e, toHero, d);
   }
+}
+
+// 적 행동 규칙 — data.js 의 ai 이름으로 고른다. 새 행동은 여기 한 줄 + 함수 하나
+//   act(e, adjacent, d): 이번 턴에 행동했으면 true. false 면 (알아챈 적은) 주인공을 쫓아간다
+//   onHit(e): 맞았을 때. 없으면 그냥 알아챈다
+const ENEMY_AI = {
+  melee: { act: meleeTurn },
+  ranged: { act: clientTurn },
+  grab: { act: leaderTurn },
+  wander: { act: sangsaTurn, onHit: sangsaCall }, // 맞으면 알아채고 부른다
+  boss: { act: bossTurn },
+};
+
+// 근접: 옆에 있으면 때린다
+function meleeTurn(e, adjacent) {
+  if (!adjacent) return false;
+  hurtHero(e, attackOf(e), pickLine(e));
+  return true;
 }
 
 // 주인공 쪽으로 한 칸 (막혀 있으면 이번 턴은 쉰다)
@@ -519,14 +530,15 @@ function chase(e, toHero, d) {
 
 // 사장님: 알아채면 n턴마다 동기를 옆에 불러오고, 옆에 오면 때린다
 function bossActEvery(e) {
-  return e.enraged ? 1 : BOSS.actEvery;
+  return e.enraged ? 1 : e.type.actEvery;
 }
 
 function bossTurn(e, adjacent) {
+  const t = e.type;
   if (!e.awake) return true; // 알아채기 전엔 출구 앞에서 기다린다
   if (!e.started) {
     e.started = true;
-    e.cooldown = BOSS.firstSummonDelay;
+    e.cooldown = t.firstSummonDelay;
     e.busy = 0;
   }
   // 바쁜 사장님: actEvery 턴에 한 번만 움직이거나 때린다 (분노하면 매 턴)
@@ -535,18 +547,18 @@ function bossTurn(e, adjacent) {
     if (e.busy !== 0) return true;
   }
   const summoned = state.enemies.filter((o) => o.summoned).length;
-  if (e.cooldown === 0 && summoned < BOSS.maxSummons) {
+  if (e.cooldown === 0 && summoned < t.maxSummons) {
     const spot = STEPS4
       .map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy }))
       .find((p) => !occupied(p.x, p.y));
     if (spot) {
-      const d = makeEnemy('donggi', spot.x, spot.y);
+      const d = makeEnemy(t.summonKind, spot.x, spot.y);
       d.awake = true;
       d.summoned = true;
       d.bonus = e.bonus; // 야근한 만큼 불려 온 동기도 세다
       state.enemies.push(d);
-      e.cooldown = BOSS.summonEvery;
-      say('사장님: "다들 모여, 긴급 회의다!" 동기가 불려 왔다.');
+      e.cooldown = t.summonEvery;
+      say(t.summonLine);
       return true;
     }
   }
@@ -566,24 +578,24 @@ function leaderTurn(e, adjacent) {
     if (!state.over && state.grab && state.grab.turns <= 0) {
       state.grab = null;
       e.cooldown = t.grabCooldown;
-      say('팀장님: "1차만 하고 가~" 겨우 풀려났다.');
+      say(t.releaseLine);
     }
     return true;
   }
   if (!adjacent) return false;
   e.facing = state.hero.x > e.x ? 1 : state.hero.x < e.x ? -1 : e.facing;
   if (e.cooldown === 0 && !state.grab) {
-    if (state.annualTurns > 0) {
-      say('연차 중이라 회식 제안을 정중히 거절했다.');
+    if (activeBuff('invincible')) {
+      say(t.declineLine);
       return true;
     }
     const turns = Math.max(1, t.grabTurns - state.stat.grabResist);
     state.grab = { by: e, turns };
     state.shake = 6;
-    say('팀장님: "오늘 회식 알지?" 붙잡혔다! (연차·반차로 탈출 / ' + turns + '턴 뒤 풀려남)');
+    say(t.grabLine(turns));
     return true;
   }
-  hurtHero(e, attackOf(e), '팀장님이 어깨를 툭 친다. "다음엔 꼭 와~"');
+  hurtHero(e, attackOf(e), t.pokeLine);
   return true;
 }
 
@@ -615,10 +627,11 @@ function lineOfFire(e) {
 }
 
 // 상사: 평소엔 돌아다니기만. 가까이 오면 같은 방 적을 부른다
-function sangsaTurn(e, d) {
+// (쫓아오지 않으므로 언제나 "행동함" 을 돌려준다)
+function sangsaTurn(e, adjacent, d) {
   if (e.cooldown === 0 && d >= 0 && d <= e.type.notice) {
     sangsaCall(e);
-    return;
+    return true;
   }
   if (state.rng() < 0.5) {
     const options = STEPS4
@@ -629,6 +642,7 @@ function sangsaTurn(e, d) {
       moveUnit(e, n.x, n.y);
     }
   }
+  return true;
 }
 
 function sangsaCall(e) {
@@ -641,7 +655,7 @@ function sangsaCall(e) {
   const near = distances(state.map.grid, e, ENEMY_BLOCKING);
   let called = 0;
   for (const o of state.enemies) {
-    if (o === e || o.type.ai === 'wander') continue;
+    if (o === e || o.type.ai === e.type.ai) continue; // 같은 부류(상사)끼리는 부르지 않는다
     const inRange = room
       ? roomAt(state.map, o.x, o.y) === room
       : near[o.y][o.x] >= 0 && near[o.y][o.x] <= 6;
@@ -650,15 +664,16 @@ function sangsaCall(e) {
       called += 1;
     }
   }
-  say(called ? pickLine(e) : '상사: "이거 누가 좀 해 봐." …아무도 없다.');
+  say(called ? pickLine(e) : e.type.aloneLine);
 }
 
 function hurtHero(e, dmg, line) {
   const h = state.hero;
   e.facing = h.x > e.x ? 1 : h.x < e.x ? -1 : e.facing;
-  if (state.annualTurns > 0) {
+  const guard = activeBuff('invincible');
+  if (guard) {
     popup(h.x, h.y, '0', '#7fd6a8');
-    say('연차 중이라 ' + e.type.short + '의 연락을 받지 않았다.');
+    say(STAGE.items[guard].guardLine(e.type.short));
     return;
   }
   dmg = Math.max(1, dmg - state.stat.guard);
@@ -679,9 +694,14 @@ function hurtHero(e, dmg, line) {
 // 7. 끝 — 퇴근 성공 / 멘탈 붕괴, 최고 기록
 //    기록: 0 = 퇴근 성공, 1~5 = 도달한 가장 낮은 층
 // ─────────────────────────────────────────────
-const BEST_KEY = 'exit-company.best';
+
+// 저장 이름. 기록은 탄마다 따로 남긴다 — 1탄은 예전 이름 그대로 (exit-company.best), 다른 탄은 exit-company.home.best
+function storeKey(name, stage = STAGE) {
+  return 'exit-company.' + (stage === STAGES[0] ? '' : stage.id + '.') + name;
+}
 
 // 도감: 퇴근시킨 적 · 먹은 아이템 수. 판이 끝나도 남는다 { enemies: { donggi: 12 }, items: { coffee: 30 } }
+// (탄을 가리지 않고 한곳에 모은다 — 적·아이템 종류 이름이 탄끼리 겹치지 않게 짓는다)
 const DEX_KEY = 'exit-company.dex';
 
 function loadDex() {
@@ -702,7 +722,6 @@ function recordDex(group, kind) {
     // 저장이 막힌 환경에서는 기록만 못 남긴다
   }
 }
-const BEST_SCORE_KEY = 'exit-company.bestScore';
 
 function loadJson(key) {
   try {
@@ -721,15 +740,13 @@ function saveJson(key, value) {
 }
 
 // 기록 화면용 누적 기록. recent = 최근 판 (새 판이 앞)
-const RECORDS_KEY = 'exit-company.records';
 const RECENT_MAX = 5;
 
 function loadRecords() {
-  return { plays: 0, clears: 0, bestOvertime: null, bestTurns: null, recent: [], ...loadJson(RECORDS_KEY) };
+  return { plays: 0, clears: 0, bestOvertime: null, bestTurns: null, recent: [], ...loadJson(storeKey('records')) };
 }
 
 // 오늘의 출근: 날짜(20261011)가 시드. 오늘 기록은 날이 바뀌면 비우고, 연속 출근 일수만 이어 간다
-const DAILY_KEY = 'exit-company.daily';
 
 function todayKey(d = new Date()) {
   return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
@@ -740,7 +757,7 @@ function dayLabel(key) {
 }
 
 function loadDaily() {
-  const d = { date: 0, tries: 0, bestScore: null, bestFloor: null, streak: 0, lastDate: 0, ...loadJson(DAILY_KEY) };
+  const d = { date: 0, tries: 0, bestScore: null, bestFloor: null, streak: 0, lastDate: 0, ...loadJson(storeKey('daily', STAGES[0])) };
   const today = todayKey();
   if (d.date !== today) Object.assign(d, { date: today, tries: 0, bestScore: null, bestFloor: null });
   const yesterday = new Date();
@@ -757,7 +774,7 @@ function startDaily() {
     d.lastDate = d.date;
   }
   d.tries += 1;
-  saveJson(DAILY_KEY, d);
+  saveJson(storeKey('daily', STAGES[0]), d);
 }
 
 // 판이 끝날 때 누적 기록을 남긴다. score = 퇴근 성공했을 때의 점수 (실패면 null)
@@ -772,7 +789,7 @@ function recordRun(cleared, score) {
     date: todayKey(), cleared, floor: state.floor, score, overtime: state.overtime, turn: state.turn, daily: state.daily,
   });
   rec.recent.length = Math.min(rec.recent.length, RECENT_MAX);
-  saveJson(RECORDS_KEY, rec);
+  saveJson(storeKey('records'), rec);
 
   if (!state.daily) return;
   const d = loadDaily();
@@ -782,14 +799,14 @@ function recordRun(cleared, score) {
   } else if (d.bestFloor === null || state.floor < d.bestFloor) {
     d.bestFloor = state.floor;
   }
-  saveJson(DAILY_KEY, d);
+  saveJson(storeKey('daily', STAGES[0]), d);
   document.getElementById('seed').textContent = '오늘의 출근 ' + dayLabel(d.date) + ' · ' + d.tries + '번째 도전'
     + (d.bestScore !== null ? ' · 오늘 최고 ' + d.bestScore + '점' : '');
 }
 
-function loadBestScore() {
+function loadBestScore(stage = STAGE) {
   try {
-    const v = localStorage.getItem(BEST_SCORE_KEY);
+    const v = localStorage.getItem(storeKey('bestScore', stage));
     return v === null ? null : Number(v);
   } catch (e) {
     return null;
@@ -819,9 +836,9 @@ function scoreLines() {
 function saveBestScore(score) {
   let prev = null;
   try {
-    const v = localStorage.getItem(BEST_SCORE_KEY);
+    const v = localStorage.getItem(storeKey('bestScore'));
     prev = v === null ? null : Number(v);
-    if (prev === null || score > prev) localStorage.setItem(BEST_SCORE_KEY, String(score));
+    if (prev === null || score > prev) localStorage.setItem(storeKey('bestScore'), String(score));
   } catch (e) {
     // 저장이 막힌 환경에서는 비교만 못 한다
   }
@@ -849,9 +866,9 @@ function showScore(cleared) {
   return total;
 }
 
-function loadBest() {
+function loadBest(stage = STAGE) {
   try {
-    const v = localStorage.getItem(BEST_KEY);
+    const v = localStorage.getItem(storeKey('best', stage));
     return v === null ? null : Number(v);
   } catch (e) {
     return null;
@@ -862,7 +879,7 @@ function saveBest(reached) {
   const prev = loadBest();
   const best = prev === null ? reached : Math.min(prev, reached);
   try {
-    localStorage.setItem(BEST_KEY, String(best));
+    localStorage.setItem(storeKey('best'), String(best));
   } catch (e) {
     // 저장이 막힌 환경(시크릿 창 등)에서는 기록만 못 남긴다
   }
@@ -910,7 +927,7 @@ function say(text) {
 function updateHud() {
   const clock = document.getElementById('clock');
   clock.textContent = clockText();
-  clock.className = state.overtime >= CLOCK.max ? 'midnight'
+  clock.className = state.overtime >= STAGE.clock.max ? 'midnight'
     : state.overtime < 3 * 60 ? 'ok' : state.overtime < 5 * 60 ? '' : 'late';
   document.getElementById('enemiesLeft').textContent = state.enemies.length;
   document.getElementById('itemsLeft').textContent = state.items.length;
@@ -920,30 +937,31 @@ function updateHud() {
   document.getElementById('floor').textContent = state.floor + 'F';
   const m = document.getElementById('mental');
   m.textContent = state.mental + '/' + state.stat.maxMental;
-  const low = state.mental <= HERO.lowMental && !state.over;
-  m.className = state.mental <= HERO.lowMental ? 'low' : '';
+  const low = state.mental <= STAGE.hero.lowMental && !state.over;
+  m.className = state.mental <= STAGE.hero.lowMental ? 'low' : '';
   document.getElementById('stage').classList.toggle('danger', low);
   setAlarm(low && state.screen === 'play');
 
-  for (const kind of Object.keys(ITEM_TYPES)) {
+  for (const [kind, type] of Object.entries(STAGE.items)) {
     document.getElementById('n-' + kind).textContent = state.bag[kind];
     const btn = document.querySelector('#items [data-item="' + kind + '"]');
     btn.disabled = state.bag[kind] <= 0;
-    // 회식 탈출 아이템(연차·반차)을 가지고 있으면 강조
-    // 멘탈이 낮으면 커피를 강조
-    const need = kind === 'coffee' ? low : !!state.grab;
+    // 지금 필요한 아이템을 가지고 있으면 강조: 멘탈이 낮으면 회복, 붙잡혔으면 탈출 아이템
+    const need = type.heal ? low : !!(type.escape && state.grab);
     btn.classList.toggle('hint', need && state.bag[kind] > 0);
   }
   const effects = [];
-  if (state.grab) effects.push('<b class="bad">회식 ' + state.grab.turns + '턴</b>');
-  if (state.annualTurns > 0) effects.push('<b>연차 ' + state.annualTurns + '턴</b>');
-  if (state.halfTurns > 0) effects.push('<b>반차 ' + state.halfTurns + '턴</b>');
+  if (state.grab) effects.push('<b class="bad">' + state.grab.by.type.grabLabel + ' ' + state.grab.turns + '턴</b>');
+  for (const [kind, type] of Object.entries(STAGE.items)) {
+    if (state.buffs[kind] > 0) effects.push('<b>' + type.name + ' ' + state.buffs[kind] + '턴</b>');
+  }
   document.getElementById('status').innerHTML = effects.map((t) => ' · ' + t).join('');
 
-  // 보스 체력 막대: 사장님이 알아챈 뒤부터
-  const boss = state.enemies.find((e) => e.type.ai === 'boss');
+  // 보스 체력 막대: 보스가 알아챈 뒤부터
+  const boss = findBoss();
   const bar = document.getElementById('bossbar');
   bar.className = boss && boss.awake && !state.over ? 'show' : '';
+  document.getElementById('bossname').textContent = STAGE.boss ? STAGE.enemies[STAGE.boss.kind].name : '';
   if (boss) {
     document.getElementById('bossfill').style.width = (100 * boss.hp / boss.maxHp) + '%';
     document.getElementById('bossfill').style.background = boss.enraged ? 'var(--danger)' : '';

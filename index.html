@@ -15,7 +15,7 @@
 <div id="stage">
   <canvas id="game"></canvas>
   <div id="bossbar">
-    <span>야근 강요하는 사장님<span id="bossbonus"></span></span>
+    <span><span id="bossname"></span><span id="bossbonus"></span></span>
     <div class="track"><div id="bossfill"></div></div>
   </div>
   <div id="perk">
@@ -52,12 +52,8 @@
       <h2 id="stagesTitle">어디서 탈출할까?</h2>
       <button class="close">닫기</button>
     </div>
-    <div class="stages">
-      <button id="stage1"><b>1탄 · 회사</b><span>5F 부터 1F 로비까지 내려가 퇴근한다</span><span id="stage1Best"></span></button>
-      <button id="stageDaily"><b>오늘의 출근 · <span id="dailyDate"></span></b><span>오늘 하루는 누구나 같은 회사. 몇 번이든 다시 도전할 수 있다</span><span id="dailyBest"></span></button>
-      <button disabled><b>2탄 · 집</b><span>넷플릭스 · 배달 · 숏폼 · 술… 쉬지 못하게 붙잡는 유혹들 (준비 중)</span></button>
-      <button disabled><b>3탄 · 회식</b><span>준비 중</span></button>
-    </div>
+    <!-- 탄 버튼은 js/data.js 의 STAGES 로 만든다 (js/ui.js) -->
+    <div class="stages" id="stageList"></div>
   </div>
 </div>
 
@@ -126,11 +122,8 @@
 </div>
 <p id="msg"></p>
 
-<div id="items">
-  <button data-item="coffee"><span class="key">1</span> 커피 ×<span id="n-coffee">0</span></button>
-  <button data-item="annual"><span class="key">2</span> 연차 ×<span id="n-annual">0</span></button>
-  <button data-item="half"><span class="key">3</span> 반차 ×<span id="n-half">0</span></button>
-</div>
+<!-- 아이템 버튼은 js/data.js 의 아이템 표로 만든다 (js/ui.js) -->
+<div id="items"></div>
 
 <div id="pad">
   <button class="up" data-dir="up">▲</button>

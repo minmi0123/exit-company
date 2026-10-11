@@ -52,8 +52,10 @@ const PERKS = [
 // 아래층일수록 적 체력이 조금씩 오른다 (강화를 받는 만큼). 사장님은 BOSS.hp 에서 따로 정한다
 const HP_PER_FLOOR = 0.1; // 한 층 내려갈 때마다 +10%
 
-// ai: melee(쫓아와서 때림) · ranged(한 줄로 보이면 던짐) · grab(붙잡기) · wander(돌아다니다 부름)
+// ai: melee(쫓아와서 때림) · ranged(한 줄로 보이면 던짐) · grab(붙잡기) · wander(돌아다니다 부름) · boss
+//     행동 규칙은 game.js 의 ENEMY_AI 에 있다. 새 적은 여기 한 덩어리만 추가하면 된다 (그림은 sprites.js 의 SPRITES[kind])
 // short/obj: 문장에 넣을 이름 (받침에 따라 을/를)
+// 적마다 하는 말(…Line)도 여기 둔다 — game.js 에는 적 이름이 나오지 않는다
 const ENEMY_TYPES = {
   donggi: {
     name: '일 못하는 동기',
@@ -97,11 +99,20 @@ const ENEMY_TYPES = {
     grabTurns: 3,     // 이만큼 지나면 저절로 풀려남
     grabCooldown: 4,  // 풀어 준 뒤 다시 붙잡기까지
     sight: 8,
-    lines: [
+    lines: [   // 붙잡은 동안 매 턴
       '팀장님이 잔을 채운다.',
       '팀장님: "한 잔만 더~"',
       '팀장님이 옛날 이야기를 시작했다.',
     ],
+    grabLabel: '회식',  // 화면 위 상태 표시: "회식 3턴"
+    grabLine: (turns) => '팀장님: "오늘 회식 알지?" 붙잡혔다! (연차·반차로 탈출 / ' + turns + '턴 뒤 풀려남)',
+    releaseLine: '팀장님: "1차만 하고 가~" 겨우 풀려났다.',
+    escapeLine: '회식에서 빠져나왔다!',
+    declineLine: '연차 중이라 회식 제안을 정중히 거절했다.',   // 무적일 때 붙잡으려 하면
+    pokeLine: '팀장님이 어깨를 툭 친다. "다음엔 꼭 와~"',       // 붙잡기 대기 중에 때릴 때
+    holdAttackLine: '팀장님한테 손을 댈 순 없다… (연차·반차로 탈출)',
+    holdMoveLine: '팀장님이 놓아주지 않는다… (연차·반차로 탈출)',
+    holdThrowLine: '팀장님 말고는 맞힐 사람이 없다… (연차·반차로 탈출)',
   },
   sangsa: {
     name: '능력없는 상사',
@@ -118,6 +129,11 @@ const ENEMY_TYPES = {
       '상사: "다 같이 고민해 보자고~" 주변 적이 몰려온다!',
       '상사: "나는 큰 그림만 볼게." 주변 적이 몰려온다!',
     ],
+    aloneLine: '상사: "이거 누가 좀 해 봐." …아무도 없다.',  // 불렀는데 근처에 아무도 없을 때
+    idleMark: '♪',    // 평소 머리 위 표시 (노래 듣는 중)
+    // 쓰러지면 남은 적 공격력이 이만큼 오른다. 쓰러뜨린 수만큼 쌓인다 (상한 없음)
+    deathBuff: 1,
+    deathBuffLine: '일을 떠넘기고 갔다! 남은 적 공격력 +',
     leaveLines: [ // 쓰러질 때 (일을 떠넘기고 간다)
       '상사: "나머진 알아서들 해~"',
       '상사: "나 먼저 들어가 볼게. 내일 아침까지 부탁해~"',
@@ -131,6 +147,8 @@ const BOSS = {
   name: '야근 강요하는 사장님',
   short: '사장님', obj: '사장님을',
   ai: 'boss',
+  boss: true,         // 살아 있으면 출구가 잠긴다 · 체력은 화면 아래 큰 막대 · 층 체력 보정 없음
+  scale: 2,           // 2배 크기로 그린다
   desc: '1층 로비 문을 막고 있다. 쓰러뜨려야 문이 열린다. 알아챈 뒤로 시계를 빨리 돌리며 점점 세지고, "긴급 회의"로 동기를 불러온다. 평소엔 바빠서 한 턴씩 걸러 움직이지만 (머리 위 "!" = 다음 턴에 행동), 궁지에 몰리면 분노해서 매 턴 움직인다.',
   hp: 30,             // 볼펜·아이템이 늘어서 18 → 27, 강화가 생겨서 → 30 (2026-09-30)
   attack: 5,          // 대신 2턴에 한 번만 때린다 (분노하면 매 턴). 4 로 낮췄다가 쉽다는 평가로 원복 (2026-10)
@@ -142,6 +160,13 @@ const BOSS = {
   actEvery: 2,        // 바쁜 사장님: 2턴에 한 번 행동. 행동 직전 턴엔 머리 위 빨간 "!"
   overtimeEvery: 8,   // 알아챈 뒤 n턴마다 퇴근 시간 30분 밀림 + 공격력 +1
   overtimeMaxBonus: 3,
+  summonKind: 'donggi',
+  summonLine: '사장님: "다들 모여, 긴급 회의다!" 동기가 불려 왔다.',
+  enrageLine: '사장님이 넥타이를 풀었다! "오늘 아무도 못 가!" 이제 매 턴 움직인다.',
+  lockLine: '로비 문이 잠겨 있다. 사장님: "퇴근? 누가?"',
+  overtimeLine: ' 사장님이 퇴근 시간을 밀었다.',
+  overtimeUpLine: ' 사장님 공격력 +1',
+  overtimeImmuneLine: ' (야근 면역: 사장님 공격력 그대로)',
   lines: [
     '사장님: "요즘 애들은 끈기가 없어."',
     '사장님: "내일 아침까지 되지?"',
@@ -160,16 +185,71 @@ const ENEMIES_PER_FLOOR = {
   1: { donggi: 2, client: 1 },  // 보스 층은 가볍게 (사장님이 동기를 불러오므로)
 };
 
-// 상사가 쓰러지면 남은 적 공격력이 이만큼 오른다. 상사를 쓰러뜨린 수만큼 쌓인다 (상한 없음)
-const SANGSA_DEATH_BUFF = 1;
-
 // 아이템. 층마다 min~max 개, chance 는 그 층에 나올 확률
-// tag/desc: 메뉴얼에 보이는 글 (수치는 쓰지 않는다)
+// tag/desc: 도감에 보이는 글 (수치는 쓰지 않는다)
+// 효과는 아래 값으로 정한다 — 새 아이템은 여기 한 줄만 추가하면 버튼 · 단축키 · 가방 · 도감이 따라온다
+//   heal: 멘탈 회복량            turns: 효과가 이어지는 턴
+//   invincible: 그동안 무적      power: 그동안 공격력 배수 (올림)
+//   escape: 붙잡혔을 때 쓰면 빠져나온다
+//   key: 단축키 숫자 (버튼도 이 순서로 놓인다)
 const ITEM_TYPES = {
   coffee: { name: '커피', key: 1, min: 2, max: 3, chance: 1, heal: 5,
-    tag: '회복', desc: '멘탈을 회복한다. 가장 자주 나온다.' },
-  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.7, turns: 5,  // 무적. 강해서 한 층에 하나까지
-    tag: '무적 · 탈출', desc: '잠시 무적이 된다. 팀장님에게 붙잡혔을 때 쓰면 빠져나온다.' },
-  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 5, power: 1.5, // 공격력 1.5배 (올림)
-    tag: '공격 · 탈출', desc: '오전에 몰아서 끝낸다. 잠시 공격력이 1.5배가 된다. 팀장님에게 붙잡혔을 때 쓰면 빠져나온다.' },
+    tag: '회복', desc: '멘탈을 회복한다. 가장 자주 나온다.',
+    useLine: '커피를 마셨다. 정신이 든다.' },
+  annual: { name: '연차', key: 2, min: 1, max: 1, chance: 0.7, turns: 5, invincible: true, escape: true, // 강해서 한 층에 하나까지
+    tag: '무적 · 탈출', desc: '잠시 무적이 된다. 팀장님에게 붙잡혔을 때 쓰면 빠져나온다.',
+    useLine: (t) => '연차를 냈다! ' + t.turns + '턴 동안 아무도 나를 건드릴 수 없다.',
+    guardLine: (who) => '연차 중이라 ' + who + '의 연락을 받지 않았다.' },
+  half:   { name: '반차', key: 3, min: 1, max: 2, chance: 0.8, turns: 5, power: 1.5, escape: true,
+    tag: '공격 · 탈출', desc: '오전에 몰아서 끝낸다. 잠시 공격력이 1.5배가 된다. 팀장님에게 붙잡혔을 때 쓰면 빠져나온다.',
+    useLine: (t) => '반차를 냈다! 오전에 몰아서 끝낸다 — ' + t.turns + '턴 동안 공격력 ' + t.power + '배.' },
 };
+
+// 시계: 5층 18:00 부터. every 턴마다 step 분, max 가 되면 멈춘다 (판 전체로 이어진다)
+// 75턴 = 2026-10 플레이 기록(2층 중간 526턴)으로 맞춤. 한 판 ~750턴이면 23시쯤 퇴근
+const CLOCK = {
+  start: 18 * 60,     // 18:00
+  every: 75,
+  step: 30,
+  max: 6 * 60,        // 18:00 + 6시간 = 00:00
+  midnightLine: '00:00. 막차가 끊겼다… 시계는 더 이상 보지 않기로 했다.',
+};
+
+// ─────────────────────────────────────────────
+// 탄 (스테이지) — 탄 하나에 필요한 것을 한 묶음으로. 게임은 지금 고른 탄(STAGE)만 본다
+//    새 탄은 위와 같은 표(적 · 층별 구성 · 아이템 · 강화 · 시계)를 따로 만들어 이 모양으로 묶고 STAGES 에 넣는다.
+//    open: false 면 탄 고르기 창에 "준비 중" 으로만 보인다
+// ─────────────────────────────────────────────
+const COMPANY = {
+  id: 'company',
+  name: '1탄 · 회사',
+  desc: '5F 부터 1F 로비까지 내려가 퇴근한다',
+  open: true,
+  topFloor: 5,                      // 맨 위층에서 시작해 1층까지 내려간다
+  hero: HERO,
+  perks: PERKS,
+  enemies: ENEMY_TYPES,
+  enemiesPerFloor: ENEMIES_PER_FLOOR,
+  hpPerFloor: HP_PER_FLOOR,
+  boss: { kind: 'boss', floor: 1 }, // 이 층 출구 앞에 선다
+  items: ITEM_TYPES,
+  clock: CLOCK,
+  text: {
+    weapon: '키보드',
+    thrown: '볼펜',
+    throwWait: (turns) => '볼펜을 다시 집는 중… (' + turns + '턴)',
+    floorIntro: (floor, clock) => (floor === 1
+      ? '1F 로비. 그런데 사장님이 출구를 막고 있다! 지금 ' + clock + '.'
+      : floor + 'F. 계단으로 내려가자. 모두 퇴근시키면 강화 보너스!'),
+    exitLocked: (left) => '로비 문이 잠겨 있다. 남은 적 ' + left + '명을 먼저 퇴근시키자.',
+    exitOpen: '모두 퇴근했다. 로비 문이 열렸다!',
+  },
+};
+
+const STAGES = [
+  COMPANY,
+  { id: 'home', name: '2탄 · 집', desc: '넷플릭스 · 배달 · 숏폼 · 술… 쉬지 못하게 붙잡는 유혹들 (준비 중)', open: false },
+  { id: 'party', name: '3탄 · 회식', desc: '준비 중', open: false },
+];
+
+let STAGE = COMPANY; // 지금 고른 탄

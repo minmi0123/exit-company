@@ -11,11 +11,36 @@ const KEYS = {
   ArrowRight: 'right', KeyD: 'right',
 };
 
-const ITEM_KEYS = {
-  Digit1: 'coffee', Numpad1: 'coffee',
-  Digit2: 'annual', Numpad2: 'annual',
-  Digit3: 'half', Numpad3: 'half',
-};
+// 숫자 키 → 아이템 종류 (아이템 표의 key 번호). 해당하는 아이템이 없으면 undefined
+function itemForKey(code) {
+  return Object.keys(STAGE.items).find((kind) => {
+    const n = STAGE.items[kind].key;
+    return code === 'Digit' + n || code === 'Numpad' + n;
+  });
+}
+
+// 아이템 버튼: 지금 탄의 아이템 표로 만든다 (탄을 바꾸면 다시 만든다)
+function buildItemButtons() {
+  const box = document.getElementById('items');
+  box.innerHTML = '';
+  for (const [kind, type] of Object.entries(STAGE.items)) {
+    const btn = document.createElement('button');
+    btn.dataset.item = kind;
+    const key = document.createElement('span');
+    key.className = 'key';
+    key.textContent = type.key;
+    const count = document.createElement('span');
+    count.id = 'n-' + kind;
+    count.textContent = '0';
+    btn.append(key, ' ' + type.name + ' ×', count);
+    btn.addEventListener('click', () => {
+      btn.blur(); // 포커스가 남으면 Space/Enter 로 또 눌린다
+      useItem(kind);
+    });
+    box.append(btn);
+  }
+}
+buildItemButtons();
 
 // 꾹 누르기: 누르면 한 칸, 계속 누르고 있으면 HOLD_DELAY 뒤부터 HOLD_EVERY 마다 한 칸씩.
 // 이어 걷는 칸에선 공격하지 않고, 위험하거나 볼 만한 게 생기면 멈춘다 (다시 눌러야 움직인다)
@@ -48,7 +73,7 @@ function holdStep() {
   const [dx, dy] = DIRS[hold.dir];
   const next = tileAt(h.x + dx, h.y + dy);
   // 앞에 적·계단·출구·정수기가 있으면 이어 걷지 않는다 (한 번 더 눌러서 정한다)
-  if (enemyAt(h.x + dx, h.y + dy) || next === '>' || next === 'E' || next === 'W') return stopHold();
+  if (enemyAt(h.x + dx, h.y + dy) || TILES[next].stop) return stopHold();
   const before = { x: h.x, y: h.y, mental: state.mental, items: state.stats.items, floor: state.floor, near: nearbyEnemies() };
   act(hold.dir);
   const moved = h.x !== before.x || h.y !== before.y;
@@ -87,14 +112,21 @@ window.addEventListener('keydown', (e) => {
     } else if (dialog === 'manual' && ok) {
       e.preventDefault();
       closeDialog();
-    } else if (dialog === 'stages' && (ok || e.code === 'Digit1' || e.code === 'Numpad1')) {
-      // 오늘의 출근 버튼에 포커스가 있으면 Enter 는 그 버튼이 맡는다
-      if (ok && document.activeElement && document.activeElement.id === 'stageDaily') return;
-      e.preventDefault();
-      startGame();
-    } else if (dialog === 'stages' && e.code === 'KeyT') {
-      e.preventDefault();
-      startGame(true);
+    } else if (dialog === 'stages') {
+      // Enter = 첫 탄 · 숫자 = 그 번호의 탄 · T = 오늘의 출근
+      // 탄 버튼에 포커스가 있으면 Enter 는 그 버튼이 맡는다
+      if (ok && document.activeElement && document.activeElement.closest('#stageList')) return;
+      const stage = STAGES[Number((e.code.match(/^(?:Digit|Numpad)(\d)$/) || [])[1]) - 1];
+      if (e.code === 'KeyT') {
+        e.preventDefault();
+        startGame(true);
+      } else if (ok) {
+        e.preventDefault();
+        startGame();
+      } else if (stage && stage.open) {
+        e.preventDefault();
+        startGame(false, stage);
+      }
     }
     return; // 환경설정 창에선 키보드로 슬라이더·체크박스를 다룰 수 있게 둔다
   }
@@ -121,9 +153,10 @@ window.addEventListener('keydown', (e) => {
     showTitle();
     return;
   }
-  if (ITEM_KEYS[e.code]) {
+  const item = itemForKey(e.code);
+  if (item) {
     e.preventDefault();
-    useItem(ITEM_KEYS[e.code]);
+    useItem(item);
     return;
   }
   if (e.code === 'Space') {
@@ -135,13 +168,6 @@ window.addEventListener('keydown', (e) => {
   if (!dir) return;
   e.preventDefault();
   startHold(dir);
-});
-
-document.querySelectorAll('#items button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    btn.blur(); // 포커스가 남으면 Space/Enter 로 또 눌린다
-    useItem(btn.dataset.item);
-  });
 });
 
 document.querySelectorAll('#pad button').forEach((btn) => {
@@ -282,10 +308,10 @@ let pendingSeed = Number(params.get('seed')) || null;
 const TITLE_SUB = '오늘도 무사히 퇴근할 수 있을까?';
 
 // 최고 기록 한 줄: 퇴근에 성공한 적이 있으면 점수, 아니면 내려간 층
-function bestText() {
-  const score = loadBestScore();
+function bestText(stage = STAGE) {
+  const score = loadBestScore(stage);
   if (score !== null) return '최고 점수 ' + score + '점';
-  const best = loadBest();
+  const best = loadBest(stage);
   if (best === null) return '';
   return '최고 기록: ' + (best === 0 ? '퇴근 성공' : best + 'F 까지');
 }
@@ -331,13 +357,21 @@ function endIntro() {
   done();
 }
 
-// daily = 오늘의 출근 (날짜 시드)
-function startGame(daily = false) {
+// 탄을 바꾼다: 그 탄의 아이템 버튼으로 갈아 끼운다 (나머지는 판을 시작할 때 STAGE 에서 읽는다)
+function setStage(stage) {
+  if (stage === STAGE) return;
+  STAGE = stage;
+  buildItemButtons();
+}
+
+// daily = 오늘의 출근 (날짜 시드, 첫 탄에서 한다)
+function startGame(daily = false, stage = STAGES[0]) {
   closeDialog();
   if (intro) return;
   playIntro(() => {
     state.screen = 'play';
     document.getElementById('title').className = '';
+    setStage(stage);
     if (daily) {
       startDaily();
       newRun(todayKey(), true);
@@ -347,7 +381,7 @@ function startGame(daily = false) {
     }
     const rec = loadRecords();
     rec.plays += 1;
-    saveJson(RECORDS_KEY, rec);
+    saveJson(storeKey('records'), rec);
   });
 }
 
@@ -356,9 +390,9 @@ const AI_TAG = {
   melee: '근접', ranged: '원거리', grab: '붙잡기', wander: '적 부르기 (공격 안 함)', boss: '보스',
 };
 
-function firstFloorOf(kind) {
-  for (let f = TOP_FLOOR; f >= 1; f--) {
-    if (ENEMIES_PER_FLOOR[f][kind]) return f;
+function firstFloorOf(kind, stage) {
+  for (let f = stage.topFloor; f >= 1; f--) {
+    if (stage.enemiesPerFloor[f][kind]) return f;
   }
   return null;
 }
@@ -426,13 +460,15 @@ function buildDex() {
     }
     document.getElementById(countId).textContent = seen + ' / ' + entries.length;
   };
-  fill('dexEnemies', 'dexEnemyCount', Object.entries(ENEMY_TYPES).map(([kind, t]) => [
+  // 열려 있는 모든 탄의 적 · 아이템을 탄 순서대로 모은다
+  const stages = STAGES.filter((s) => s.open);
+  fill('dexEnemies', 'dexEnemyCount', stages.flatMap((s) => Object.entries(s.enemies).map(([kind, t]) => [
     kind, SPRITES[kind].right[0], t.name,
-    [[AI_TAG[t.ai], 'tag'], [kind === 'boss' ? '1F 출구' : firstFloorOf(kind) + 'F 부터', 'tag where']], t.desc,
-  ]), 'enemies', '퇴근시킴');
-  fill('dexItems', 'dexItemCount', Object.entries(ITEM_TYPES).map(([kind, t]) => [
+    [[AI_TAG[t.ai], 'tag'], [t.boss ? s.boss.floor + 'F 출구' : firstFloorOf(kind, s) + 'F 부터', 'tag where']], t.desc,
+  ])), 'enemies', '퇴근시킴');
+  fill('dexItems', 'dexItemCount', stages.flatMap((s) => Object.entries(s.items).map(([kind, t]) => [
     kind, SPRITES[kind], t.name, [[t.tag, 'tag'], [t.key + ' 키', 'tag where']], t.desc,
-  ]), 'items', '먹음');
+  ])), 'items', '먹음');
 }
 
 // 창 (게임 방법 · 도감 · 탄 고르기 · 환경설정): 한 번에 하나만 연다
@@ -448,12 +484,45 @@ function openDialog(id) {
   el.querySelector('.panel').scrollTop = 0;
   if (id === 'dex') buildDex();
   if (id === 'records') buildRecords();
-  if (id === 'stages') {
-    document.getElementById('stage1Best').textContent = bestText();
-    const d = loadDaily();
-    document.getElementById('dailyDate').textContent = dayLabel(d.date);
-    document.getElementById('dailyBest').textContent = dailyText(d);
-  }
+  if (id === 'stages') buildStageList();
+}
+
+// 탄 고르기 — data.js 의 STAGES 로 만든다. 열 때마다 최고 기록을 새로 읽는다
+// 오늘의 출근은 첫 탄 바로 아래에 둔다
+function buildStageList() {
+  const list = document.getElementById('stageList');
+  list.innerHTML = '';
+  const button = (title, lines, onClick) => {
+    const btn = document.createElement('button');
+    const b = document.createElement('b');
+    b.textContent = title;
+    btn.append(b);
+    for (const text of lines) {
+      const span = document.createElement('span');
+      span.textContent = text;
+      btn.append(span);
+    }
+    if (onClick) {
+      btn.addEventListener('click', () => {
+        btn.blur();
+        onClick();
+      });
+    } else {
+      btn.disabled = true;
+    }
+    list.append(btn);
+    return btn;
+  };
+  STAGES.forEach((stage, i) => {
+    button(stage.name, stage.open ? [stage.desc, bestText(stage)] : [stage.desc],
+      stage.open ? () => startGame(false, stage) : null);
+    if (i === 0) {
+      const d = loadDaily();
+      button('오늘의 출근 · ' + dayLabel(d.date),
+        ['오늘 하루는 누구나 같은 회사. 몇 번이든 다시 도전할 수 있다', dailyText(d)],
+        () => startGame(true)).id = 'stageDaily';
+    }
+  });
 }
 
 // 오늘의 출근 한 줄: "오늘 최고 1234점 · 3번 도전 · 연속 출근 4일"
@@ -548,14 +617,6 @@ for (const [btn, id] of [['startBtn', 'stages'], ['manualBtn', 'manual'], ['dexB
     openDialog(id);
   });
 }
-document.getElementById('stage1').addEventListener('click', (e) => {
-  e.currentTarget.blur();
-  startGame();
-});
-document.getElementById('stageDaily').addEventListener('click', (e) => {
-  e.currentTarget.blur();
-  startGame(true);
-});
 document.getElementById('title').addEventListener('pointerdown', () => endIntro()); // 시작 연출 건너뛰기
 document.querySelectorAll('.dialog').forEach((el) => {
   el.querySelector('.close').addEventListener('click', closeDialog);

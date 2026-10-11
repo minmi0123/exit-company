@@ -8,8 +8,33 @@
 // ─────────────────────────────────────────────
 const MAP_W = 32;
 const MAP_H = 24;
-const TOP_FLOOR = 5;
-const BLOCKING = new Set(['#', 'D', 'T', 'P', 'C', 'W', 'V', 'S']);
+
+// 칸 종류. 새 가구는 여기 한 줄 + sprites.js 의 그림만 추가하면 된다
+//   sprite: SPRITES 의 이름 (배열이면 2x2 가구의 네 조각)   block: 지나갈 수 없다
+//   stop: 꾹 눌러 걷다가 이 앞에서 멈춘다                    goal: 밟으면 계단(stairs) / 출구(exit)
+//   noEnemy: 적이 설 수 없다 (출구에 서면 영영 못 나간다)
+//   drink: 부딪히면 한 번 마시고 becomes 칸으로 바뀐다
+const TILES = {
+  '#': { block: true },
+  '.': { sprite: 'floor' },
+  D: { sprite: 'desk', block: true },
+  T: { sprite: 'meeting', block: true },
+  P: { sprite: 'plant', block: true },
+  C: { sprite: 'copier', block: true },
+  W: { sprite: 'cooler', block: true, stop: true,
+    drink: {
+      becomes: 'V',
+      fullLine: '정수기다. 지금은 목이 안 마르다.',
+      line: (heal) => '정수기 물을 마셨다. 멘탈 +' + heal,
+    } },
+  V: { sprite: 'coolerEmpty', block: true },
+  S: { sprite: 'shelf', block: true },
+  '>': { sprite: 'stairs', stop: true, goal: 'stairs' },
+  E: { sprite: 'exit', stop: true, goal: 'exit', noEnemy: true },
+};
+const STAIRS_TILE = '>';
+const EXIT_TILE = 'E';
+const BLOCKING = new Set(Object.keys(TILES).filter((t) => TILES[t].block));
 const STEPS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 // 시드가 같으면 같은 맵이 나온다 (버그 재현용)
@@ -36,7 +61,7 @@ function center(room) {
 
 // 적이 길을 찾을 때는 출구도 벽이다 (적은 출구에 설 수 없다.
 // 이걸 빼면 잠긴 출구를 지름길로 착각해 제자리에 멈춘다 — 2026-09-30 시드 917686)
-const ENEMY_BLOCKING = new Set([...BLOCKING, 'E']);
+const ENEMY_BLOCKING = new Set([...BLOCKING, ...Object.keys(TILES).filter((t) => TILES[t].noEnemy)]);
 
 // 시작점에서 걸어갈 수 있는 칸까지의 거리 (막힌 칸은 -1)
 function distances(grid, from, blocking = BLOCKING) {
@@ -125,7 +150,7 @@ function generateFloor(floorNo, rng) {
     // 계단/출구 칸 자체가 유일한 통로면 (책상이 없어도) 막다른 칸이 생긴다 → 맵을 새로 만든다
     if (countReachable(grid, start) !== countWalkable(grid)) continue;
     furnish(grid, rooms, startRoom, start, goal, rng);
-    grid[goal.y][goal.x] = floorNo === 1 ? 'E' : '>';
+    grid[goal.y][goal.x] = floorNo === 1 ? EXIT_TILE : STAIRS_TILE;
 
     return { grid, start, rooms };
   }
@@ -133,7 +158,9 @@ function generateFloor(floorNo, rng) {
 
 // 가구 배치. 놓았을 때 걸어갈 수 있는 칸이 끊기면 되돌린다.
 // 시작점·계단 바로 옆은 비워 둔다 (1층 사장님은 출구 옆 빈칸에 선다)
-const WALL_PROPS = ['P', 'P', 'C', 'W', 'S', 'S'];
+// 같은 글자를 여러 번 넣으면 그만큼 자주 나온다
+const WALL_PROPS = ['P', 'P', 'C', 'W', 'S', 'S']; // 방 윗벽에 붙는 소품
+const SIDE_PROPS = ['P', 'P', 'W', 'C'];           // 양옆 벽에 붙는 소품
 function furnish(grid, rooms, startRoom, start, goal, rng) {
   const near = (x, y, p) => Math.abs(x - p.x) + Math.abs(y - p.y) <= 1;
   const free = (x, y) => grid[y][x] === '.' && !near(x, y, start) && !near(x, y, goal);
@@ -192,7 +219,7 @@ function furnish(grid, rooms, startRoom, start, goal, rng) {
     const sideCount = randInt(rng, 1, 2);
     for (let i = 0; i < sideCount && sideSpots.length; i++) {
       const cell = sideSpots.splice(randInt(rng, 0, sideSpots.length - 1), 1)[0];
-      place([cell], 'PPWC'[randInt(rng, 0, 3)]);
+      place([cell], SIDE_PROPS[randInt(rng, 0, SIDE_PROPS.length - 1)]);
     }
   }
 }
@@ -210,7 +237,7 @@ function spawnItems(map, enemies, rng) {
     if (t === '.' && !taken) spots.push({ x, y });
   }));
   const items = [];
-  for (const [kind, type] of Object.entries(ITEM_TYPES)) {
+  for (const [kind, type] of Object.entries(STAGE.items)) {
     if (rng() >= type.chance) continue;
     const count = randInt(rng, type.min, type.max);
     for (let i = 0; i < count && spots.length; i++) {
@@ -229,19 +256,19 @@ function spawnEnemies(map, floorNo, rng) {
     if (t === '.' && dist[y][x] >= 6) spots.push({ x, y });
   }));
   const enemies = [];
-  for (const [kind, count] of Object.entries(ENEMIES_PER_FLOOR[floorNo] || {})) {
+  for (const [kind, count] of Object.entries(STAGE.enemiesPerFloor[floorNo] || {})) {
     for (let i = 0; i < count && spots.length; i++) {
       const { x, y } = spots.splice(randInt(rng, 0, spots.length - 1), 1)[0];
       enemies.push(makeEnemy(kind, x, y));
     }
   }
-  if (floorNo === 1) placeBoss(map, enemies);
+  if (STAGE.boss && floorNo === STAGE.boss.floor) placeBoss(map, enemies, STAGE.boss.kind);
   return enemies;
 }
 
 function makeEnemy(kind, x, y) {
-  const type = ENEMY_TYPES[kind];
-  const scale = kind === 'boss' ? 1 : 1 + HP_PER_FLOOR * (TOP_FLOOR - (state.floor || TOP_FLOOR));
+  const type = STAGE.enemies[kind];
+  const scale = type.boss ? 1 : 1 + STAGE.hpPerFloor * (STAGE.topFloor - (state.floor || STAGE.topFloor));
   const hp = Math.round(type.hp * scale);
   return {
     kind, type, x, y, hp, maxHp: hp, facing: -1, step: 0,
@@ -253,14 +280,14 @@ function makeEnemy(kind, x, y) {
 }
 
 // 사장님은 출구 바로 앞 칸에 선다 (그 칸에 다른 적이 있으면 비켜 준다)
-function placeBoss(map, enemies) {
+function placeBoss(map, enemies, kind) {
   let exit = null;
-  map.grid.forEach((row, y) => row.forEach((t, x) => { if (t === 'E') exit = { x, y }; }));
+  map.grid.forEach((row, y) => row.forEach((t, x) => { if (t === EXIT_TILE) exit = { x, y }; }));
   const posts = STEPS4
     .map(([dx, dy]) => ({ x: exit.x + dx, y: exit.y + dy }))
     .filter((p) => map.grid[p.y][p.x] === '.' && !(p.x === map.start.x && p.y === map.start.y));
   const post = posts.find((p) => !enemies.some((e) => e.x === p.x && e.y === p.y)) || posts[0];
   const blocker = enemies.findIndex((e) => e.x === post.x && e.y === post.y);
   if (blocker >= 0) enemies.splice(blocker, 1);
-  enemies.push(makeEnemy('boss', post.x, post.y));
+  enemies.push(makeEnemy(kind, post.x, post.y));
 }
