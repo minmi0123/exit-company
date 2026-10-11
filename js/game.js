@@ -130,10 +130,12 @@ function perksText() {
 }
 
 // 판마다 새 시드 = 새 맵. 같은 판을 다시 보려면 주소에 ?seed=번호
-function newRun(seed = randomSeed()) {
+// daily = 오늘의 출근 (날짜가 시드라 그날은 누구나 같은 맵)
+function newRun(seed = randomSeed(), daily = false) {
   state.seed = seed;
+  state.daily = daily;
   state.rng = mulberry32(seed ^ 0x5eed);
-  document.getElementById('seed').textContent = '시드 ' + seed;
+  document.getElementById('seed').textContent = daily ? '오늘의 출근 ' + dayLabel(seed) : '시드 ' + seed;
   state.turn = 0;
   state.stat = { ...HERO };
   state.perks = [];
@@ -185,7 +187,12 @@ function bossAlive() {
 }
 
 function clockText() {
-  const m = 18 * 60 + state.overtime;
+  return clockOf(state.overtime);
+}
+
+// 야근한 분 → 시각 ("21:30")
+function clockOf(overtime) {
+  const m = 18 * 60 + overtime;
   return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 }
 
@@ -697,6 +704,98 @@ function recordDex(group, kind) {
 }
 const BEST_SCORE_KEY = 'exit-company.bestScore';
 
+function loadJson(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    // 저장이 막힌 환경에서는 기록만 못 남긴다
+  }
+}
+
+// 기록 화면용 누적 기록. recent = 최근 판 (새 판이 앞)
+const RECORDS_KEY = 'exit-company.records';
+const RECENT_MAX = 5;
+
+function loadRecords() {
+  return { plays: 0, clears: 0, bestOvertime: null, bestTurns: null, recent: [], ...loadJson(RECORDS_KEY) };
+}
+
+// 오늘의 출근: 날짜(20261011)가 시드. 오늘 기록은 날이 바뀌면 비우고, 연속 출근 일수만 이어 간다
+const DAILY_KEY = 'exit-company.daily';
+
+function todayKey(d = new Date()) {
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+function dayLabel(key) {
+  return (Math.floor(key / 100) % 100) + '월 ' + (key % 100) + '일';
+}
+
+function loadDaily() {
+  const d = { date: 0, tries: 0, bestScore: null, bestFloor: null, streak: 0, lastDate: 0, ...loadJson(DAILY_KEY) };
+  const today = todayKey();
+  if (d.date !== today) Object.assign(d, { date: today, tries: 0, bestScore: null, bestFloor: null });
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.lastDate !== today && d.lastDate !== todayKey(yesterday)) d.streak = 0; // 하루 건너뛰면 끊긴다
+  return d;
+}
+
+// 오늘의 출근을 시작할 때: 도전 횟수 +1, 오늘 첫 출근이면 연속 출근 +1
+function startDaily() {
+  const d = loadDaily();
+  if (d.lastDate !== d.date) {
+    d.streak += 1;
+    d.lastDate = d.date;
+  }
+  d.tries += 1;
+  saveJson(DAILY_KEY, d);
+}
+
+// 판이 끝날 때 누적 기록을 남긴다. score = 퇴근 성공했을 때의 점수 (실패면 null)
+function recordRun(cleared, score) {
+  const rec = loadRecords();
+  if (cleared) {
+    rec.clears += 1;
+    rec.bestOvertime = rec.bestOvertime === null ? state.overtime : Math.min(rec.bestOvertime, state.overtime);
+    rec.bestTurns = rec.bestTurns === null ? state.turn : Math.min(rec.bestTurns, state.turn);
+  }
+  rec.recent.unshift({
+    date: todayKey(), cleared, floor: state.floor, score, overtime: state.overtime, turn: state.turn, daily: state.daily,
+  });
+  rec.recent.length = Math.min(rec.recent.length, RECENT_MAX);
+  saveJson(RECORDS_KEY, rec);
+
+  if (!state.daily) return;
+  const d = loadDaily();
+  if (cleared) {
+    d.bestScore = d.bestScore === null ? score : Math.max(d.bestScore, score);
+    d.bestFloor = 0;
+  } else if (d.bestFloor === null || state.floor < d.bestFloor) {
+    d.bestFloor = state.floor;
+  }
+  saveJson(DAILY_KEY, d);
+  document.getElementById('seed').textContent = '오늘의 출근 ' + dayLabel(d.date) + ' · ' + d.tries + '번째 도전'
+    + (d.bestScore !== null ? ' · 오늘 최고 ' + d.bestScore + '점' : '');
+}
+
+function loadBestScore() {
+  try {
+    const v = localStorage.getItem(BEST_SCORE_KEY);
+    return v === null ? null : Number(v);
+  } catch (e) {
+    return null;
+  }
+}
+
 // 최종 점수 (퇴근 성공했을 때만). 빨리·많이·덜 야근할수록 높다
 const SCORE = {
   clear: 1000,        // 퇴근 성공
@@ -729,12 +828,13 @@ function saveBestScore(score) {
   return prev;
 }
 
+// 점수표를 띄우고 이번 점수를 돌려준다 (실패한 판은 점수가 없다 = null)
 function showScore(cleared) {
   const box = document.getElementById('score');
   if (!cleared) {
     box.className = '';
     box.innerHTML = '';
-    return;
+    return null;
   }
   const lines = scoreLines();
   const total = Math.max(0, lines.reduce((sum, [, v]) => sum + v, 0));
@@ -746,6 +846,7 @@ function showScore(cleared) {
       ? '<div class="new">최고 점수!</div>'
       : '<div class="new" style="color: var(--muted)">최고 점수 ' + prev + '</div>');
   box.className = 'show';
+  return total;
 }
 
 function loadBest() {
@@ -784,7 +885,7 @@ function finish(cleared) {
   document.getElementById('result').textContent = cleared
     ? '퇴근 시각 ' + clockText() + late
     : state.floor + 'F 에서 쓰러졌다. (' + state.turn + '턴)';
-  showScore(cleared);
+  recordRun(cleared, showScore(cleared));
   document.getElementById('perks').textContent = state.perks.length ? '받은 강화: ' + perksText() : '';
   // 퇴근 성공이면 점수 쪽에 최고 점수가 나오므로 층 기록은 실패했을 때만
   document.getElementById('best').textContent = cleared ? '' : '최고 기록: '

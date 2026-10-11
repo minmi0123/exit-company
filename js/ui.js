@@ -74,6 +74,11 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const ok = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
+  if (intro) { // 시작 연출 중: 아무 키나 누르면 건너뛴다
+    e.preventDefault();
+    endIntro();
+    return;
+  }
   const dialog = openDialogId();
   if (dialog) {
     if (e.code === 'Escape') {
@@ -83,8 +88,13 @@ window.addEventListener('keydown', (e) => {
       e.preventDefault();
       closeDialog();
     } else if (dialog === 'stages' && (ok || e.code === 'Digit1' || e.code === 'Numpad1')) {
+      // 오늘의 출근 버튼에 포커스가 있으면 Enter 는 그 버튼이 맡는다
+      if (ok && document.activeElement && document.activeElement.id === 'stageDaily') return;
       e.preventDefault();
       startGame();
+    } else if (dialog === 'stages' && e.code === 'KeyT') {
+      e.preventDefault();
+      startGame(true);
     }
     return; // 환경설정 창에선 키보드로 슬라이더·체크박스를 다룰 수 있게 둔다
   }
@@ -185,13 +195,14 @@ const SCENE_MONITOR = [
   'oooooooooooo',
 ];
 
-function buildTitleScene(blink) {
+// walk = 시작 연출에서 신입사원이 왼쪽으로 걸어간 거리(도트). null 이면 자리에 앉아 일하는 중
+function buildTitleScene(blink, walk = null) {
   const g = Array.from({ length: SCENE_H }, () => Array(SCENE_W).fill('b'));
   const fill = (x0, y0, w, h, ch) => {
     for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) g[y][x] = ch;
   };
   const stamp = (rows, x0, y0) => rows.forEach((row, y) => [...row].forEach((ch, x) => {
-    if (ch !== '.') g[y0 + y][x0 + x] = ch;
+    if (ch !== '.' && x0 + x >= 0 && x0 + x < SCENE_W) g[y0 + y][x0 + x] = ch;
   }));
 
   // 벽 · 걸레받이 · 바닥
@@ -212,8 +223,10 @@ function buildTitleScene(blink) {
     g[7][14] = 'R';
   }
 
-  // 신입사원 (책상 위로 상반신만 보인다)
-  stamp(HERO_BODY.slice(0, 11), 16, 10);
+  // 신입사원 (책상 위로 상반신만 보인다). 걸을 땐 한 걸음마다 살짝 들썩인다
+  if (walk === null) stamp(HERO_BODY.slice(0, 11), 16, 10);
+  // (오른쪽은 모니터에 가려 금방 안 보여서 왼쪽으로 나간다 — 서류 더미 위로 머리가 지나간다)
+  else stamp(HERO_BODY.slice(0, 11), 16 - walk, 9 + (Math.floor(walk / INTRO.stride) % 2));
 
   // 모니터 + 받침
   stamp(SCENE_MONITOR, 33, 9);
@@ -235,8 +248,10 @@ function buildTitleScene(blink) {
   stamp(SCENE_CUP, 12, 16);
   fill(18, 21, 12, 1, 'K');
   for (let x = 19; x < 29; x += 2) g[21][x] = 'L';
-  g[blink ? 20 : 21][19] = 's';
-  g[blink ? 21 : 20][28] = 's';
+  if (walk === null) {
+    g[blink ? 20 : 21][19] = 's';
+    g[blink ? 21 : 20][28] = 's';
+  }
 
   return g;
 }
@@ -256,7 +271,7 @@ const TITLE_FRAMES = [buildTitleScene(false), buildTitleScene(true)];
 let titleFrame = 0;
 renderScene(TITLE_FRAMES[0], titleArt);
 setInterval(() => {
-  if (state.screen !== 'title') return;
+  if (state.screen !== 'title' || intro) return;
   titleFrame = 1 - titleFrame;
   renderScene(TITLE_FRAMES[titleFrame], titleArt);
 }, 500);
@@ -264,23 +279,76 @@ setInterval(() => {
 // ?seed= 로 들어오면 첫 판만 그 시드로 시작한다
 let pendingSeed = Number(params.get('seed')) || null;
 
+const TITLE_SUB = '오늘도 무사히 퇴근할 수 있을까?';
+
+// 최고 기록 한 줄: 퇴근에 성공한 적이 있으면 점수, 아니면 내려간 층
+function bestText() {
+  const score = loadBestScore();
+  if (score !== null) return '최고 점수 ' + score + '점';
+  const best = loadBest();
+  if (best === null) return '';
+  return '최고 기록: ' + (best === 0 ? '퇴근 성공' : best + 'F 까지');
+}
+
 function showTitle() {
   state.screen = 'title';
   clearTimeout(overlayTimer);
   document.getElementById('overlay').className = '';
   document.getElementById('msg').textContent = '';
-  const best = loadBest();
-  document.getElementById('titleBest').textContent = best === null ? ''
-    : '최고 기록: ' + (best === 0 ? '퇴근 성공' : best + 'F 까지');
+  document.getElementById('titleSub').textContent = TITLE_SUB;
+  document.getElementById('titleBest').textContent = bestText();
+  renderScene(TITLE_FRAMES[titleFrame], titleArt);
   document.getElementById('title').className = 'show';
 }
 
-function startGame() {
+// 시작 연출: 18:00 이 되자 자리에서 일어나 왼쪽으로 걸어 나간다. 끝나면 게임 시작.
+// 짧게(0.7초쯤) 하고, 아무 키·터치로 건너뛸 수 있다. 움직임 줄이기를 켠 기기에선 생략한다
+const INTRO = { every: 45, px: 2, stride: 4 }; // every ms 마다 px 도트씩, stride 도트마다 한 걸음
+let intro = null;
+
+function playIntro(done) {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
+  document.getElementById('title').classList.add('leaving');
+  document.getElementById('titleSub').textContent = '18:00. 칼퇴 간다!';
+  let walk = 0;
+  intro = {
+    done,
+    timer: setInterval(() => {
+      walk += INTRO.px;
+      if (16 - walk <= -14) return endIntro(); // 화면 밖으로 다 나갔다
+      renderScene(buildTitleScene(false, walk), titleArt);
+      if (walk % (INTRO.stride * 2) === 0) sfx('step', (walk / (INTRO.stride * 2)) % 2);
+    }, INTRO.every),
+  };
+}
+
+function endIntro() {
+  if (!intro) return;
+  clearInterval(intro.timer);
+  const done = intro.done;
+  intro = null;
+  document.getElementById('title').classList.remove('leaving');
+  done();
+}
+
+// daily = 오늘의 출근 (날짜 시드)
+function startGame(daily = false) {
   closeDialog();
-  state.screen = 'play';
-  document.getElementById('title').className = '';
-  newRun(pendingSeed || randomSeed());
-  pendingSeed = null;
+  if (intro) return;
+  playIntro(() => {
+    state.screen = 'play';
+    document.getElementById('title').className = '';
+    if (daily) {
+      startDaily();
+      newRun(todayKey(), true);
+    } else {
+      newRun(pendingSeed || randomSeed());
+      pendingSeed = null;
+    }
+    const rec = loadRecords();
+    rec.plays += 1;
+    saveJson(RECORDS_KEY, rec);
+  });
 }
 
 // 도감 카드 — 적·아이템 데이터에서 만든다 (데이터를 고치면 도감도 따라온다)
@@ -379,10 +447,80 @@ function openDialog(id) {
   el.classList.add('show');
   el.querySelector('.panel').scrollTop = 0;
   if (id === 'dex') buildDex();
+  if (id === 'records') buildRecords();
   if (id === 'stages') {
-    const best = loadBest();
-    document.getElementById('stage1Best').textContent = best === null ? ''
-      : '최고 기록: ' + (best === 0 ? '퇴근 성공' : best + 'F 까지');
+    document.getElementById('stage1Best').textContent = bestText();
+    const d = loadDaily();
+    document.getElementById('dailyDate').textContent = dayLabel(d.date);
+    document.getElementById('dailyBest').textContent = dailyText(d);
+  }
+}
+
+// 오늘의 출근 한 줄: "오늘 최고 1234점 · 3번 도전 · 연속 출근 4일"
+function dailyText(d) {
+  const parts = [];
+  if (d.tries === 0) parts.push('오늘은 아직 출근 전');
+  else {
+    if (d.bestScore !== null) parts.push('오늘 최고 ' + d.bestScore + '점');
+    else if (d.bestFloor !== null) parts.push('오늘 ' + d.bestFloor + 'F 까지');
+    parts.push(d.tries + '번 도전');
+  }
+  if (d.streak >= 2) parts.push('연속 출근 ' + d.streak + '일');
+  return parts.join(' · ');
+}
+
+// 기록 — 열 때마다 저장된 값을 읽어 새로 만든다
+function buildRecords() {
+  const rec = loadRecords();
+  const dex = loadDex();
+  const daily = loadDaily();
+  const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+  const best = loadBest();
+  const score = loadBestScore();
+  const none = '—';
+  const rows = [
+    ['출근', rec.plays + '번'],
+    ['퇴근 성공', rec.clears + '번' + (rec.plays ? ' (' + Math.min(100, Math.round(100 * rec.clears / rec.plays)) + '%)' : '')],
+    ['최고 점수', score === null ? none : score + '점'],
+    ['가장 이른 퇴근', rec.bestOvertime === null ? none : clockOf(rec.bestOvertime) + (rec.bestOvertime === 0 ? ' 정시 퇴근!' : '')],
+    ['가장 빠른 퇴근', rec.bestTurns === null ? none : rec.bestTurns + '턴'],
+    ['가장 멀리 간 곳', best === null ? none : best === 0 ? '1F 로비 탈출' : best + 'F'],
+    ['퇴근시킨 적', sum(dex.enemies) + '명'],
+    ['먹은 아이템', sum(dex.items) + '개'],
+    ['연속 출근', daily.streak ? daily.streak + '일 (오늘의 출근)' : none],
+  ];
+  const stats = document.getElementById('recordStats');
+  stats.innerHTML = '';
+  for (const [k, v] of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = k;
+    const dd = document.createElement('dd');
+    dd.textContent = v;
+    if (v === none) dd.className = 'none';
+    stats.append(dt, dd);
+  }
+
+  const recent = document.getElementById('recordRecent');
+  recent.innerHTML = '';
+  if (!rec.recent.length) {
+    const li = document.createElement('li');
+    li.className = 'none';
+    li.textContent = '아직 끝낸 판이 없다. 퇴근하기로 첫 출근을 해 보자.';
+    recent.append(li);
+  }
+  for (const r of rec.recent) {
+    const li = document.createElement('li');
+    const day = document.createElement('span');
+    day.className = 'day';
+    day.textContent = (Math.floor(r.date / 100) % 100) + '/' + (r.date % 100);
+    const what = document.createElement('span');
+    what.className = r.cleared ? 'win' : 'lose';
+    what.textContent = r.cleared ? clockOf(r.overtime) + ' 퇴근 성공' : r.floor + 'F 에서 멘탈 붕괴';
+    const detail = document.createElement('span');
+    detail.className = 'detail';
+    detail.textContent = (r.cleared ? r.score + '점' : r.turn + '턴') + (r.daily ? ' · 오늘의 출근' : '');
+    li.append(day, what, detail);
+    recent.append(li);
   }
 }
 
@@ -404,7 +542,7 @@ volumeInput.addEventListener('input', () => {
 volumeInput.addEventListener('change', () => sfx('item')); // 손을 떼면 들어 보기
 alarmInput.addEventListener('change', () => setAlarmEnabled(alarmInput.checked));
 
-for (const [btn, id] of [['startBtn', 'stages'], ['manualBtn', 'manual'], ['dexBtn', 'dex'], ['settingsBtn', 'settings']]) {
+for (const [btn, id] of [['startBtn', 'stages'], ['manualBtn', 'manual'], ['dexBtn', 'dex'], ['recordsBtn', 'records'], ['settingsBtn', 'settings']]) {
   document.getElementById(btn).addEventListener('click', (e) => {
     e.currentTarget.blur();
     openDialog(id);
@@ -414,6 +552,11 @@ document.getElementById('stage1').addEventListener('click', (e) => {
   e.currentTarget.blur();
   startGame();
 });
+document.getElementById('stageDaily').addEventListener('click', (e) => {
+  e.currentTarget.blur();
+  startGame(true);
+});
+document.getElementById('title').addEventListener('pointerdown', () => endIntro()); // 시작 연출 건너뛰기
 document.querySelectorAll('.dialog').forEach((el) => {
   el.querySelector('.close').addEventListener('click', closeDialog);
   el.addEventListener('click', (e) => {

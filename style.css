@@ -191,7 +191,21 @@ h1 { font-size: 18px; margin: 0; }
 }
 #title p { margin: 0; font-size: 14px; }
 #titleBest { color: var(--muted); font-size: 12px !important; min-height: 1em; }
-#title .buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 4px; width: min(100%, 320px); }
+/* 퇴근하기는 한 줄을 다 쓰고, 나머지 넷은 그 아래 한 줄에 */
+#title .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 4px; width: min(100%, 340px); }
+#title #startBtn { grid-column: 1 / -1; }
+#title button.sub { padding: 8px 2px; font-size: 13px; white-space: nowrap; }
+/* 시작 연출 중엔 그림과 한 줄만 남긴다 (자리는 그대로 둬서 그림이 움직이지 않게) */
+#title.leaving .buttons, #title.leaving #titleBest { visibility: hidden; }
+/* 폰: 스테이지가 낮아서(가로의 11/15) 그림과 버튼을 줄여야 다 들어간다 */
+@media (max-width: 480px) {
+  #title { gap: 4px; padding: 4px 12px; }
+  #titleArt { width: 44%; }
+  #title p { font-size: 13px; }
+  #title .buttons { margin-top: 2px; }
+  #title button { padding: 7px 16px; font-size: 15px; }
+  #title button.sub { padding: 6px 2px; font-size: 12px; }
+}
 #title button {
   padding: 10px 16px;
   font-size: 16px;
@@ -296,6 +310,7 @@ h1 { font-size: 18px; margin: 0; }
 .dialog .stages button:disabled { cursor: default; opacity: 0.55; }
 .dialog .stages b { font-size: 16px; color: var(--accent); font-weight: normal; }
 .dialog .stages span { color: var(--muted); font-size: 13px; }
+.dialog .stages b span { color: inherit; font-size: inherit; }
 /* 환경설정 */
 .dialog .setting { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #3a3544; }
 .dialog .setting label { flex: none; width: 6em; }
@@ -313,6 +328,18 @@ h1 { font-size: 18px; margin: 0; }
 .dialog .cards li.unknown .name b { color: var(--muted); }
 .dialog .cards .seen { color: #7fd6a8; font-size: 12px; }
 .dialog .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+/* 기록 */
+.dialog .stats { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 4px 0 0; }
+.dialog .stats dt { color: var(--muted); }
+.dialog .stats dd { margin: 0; text-align: right; color: var(--accent); }
+.dialog .stats dd.none { color: #5d5768; }
+.dialog .recent { display: flex; flex-direction: column; gap: 6px; }
+.dialog .recent li { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 8px; background: var(--bg); border-radius: 8px; }
+.dialog .recent li.none { color: var(--muted); }
+.dialog .recent .day { color: var(--muted); min-width: 3em; }
+.dialog .recent .win { color: #7fd6a8; }
+.dialog .recent .lose { color: var(--danger); }
+.dialog .recent .detail { color: var(--muted); margin-left: auto; }
 #msg {
   margin: 0;
   min-height: 1.4em;

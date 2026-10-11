@@ -40,6 +40,7 @@
       <button id="startBtn">퇴근하기</button>
       <button id="manualBtn" class="sub">게임 방법</button>
       <button id="dexBtn" class="sub">도감</button>
+      <button id="recordsBtn" class="sub">기록</button>
       <button id="settingsBtn" class="sub">환경설정</button>
     </div>
   </div>
@@ -53,6 +54,7 @@
     </div>
     <div class="stages">
       <button id="stage1"><b>1탄 · 회사</b><span>5F 부터 1F 로비까지 내려가 퇴근한다</span><span id="stage1Best"></span></button>
+      <button id="stageDaily"><b>오늘의 출근 · <span id="dailyDate"></span></b><span>오늘 하루는 누구나 같은 회사. 몇 번이든 다시 도전할 수 있다</span><span id="dailyBest"></span></button>
       <button disabled><b>2탄 · 집</b><span>넷플릭스 · 배달 · 숏폼 · 술… 쉬지 못하게 붙잡는 유혹들 (준비 중)</span></button>
       <button disabled><b>3탄 · 회식</b><span>준비 중</span></button>
     </div>
@@ -90,6 +92,19 @@
     <ul class="cards" id="dexEnemies"></ul>
     <h3>아이템 <span id="dexItemCount" class="count"></span></h3>
     <ul class="cards" id="dexItems"></ul>
+  </div>
+</div>
+
+<div id="records" class="dialog" role="dialog" aria-modal="true" aria-labelledby="recordsTitle">
+  <div class="panel">
+    <div class="bar">
+      <h2 id="recordsTitle">기록</h2>
+      <button class="close">닫기</button>
+    </div>
+    <dl class="stats" id="recordStats"></dl>
+    <h3>최근 퇴근길</h3>
+    <ul class="recent" id="recordRecent"></ul>
+    <p class="note">기록은 이 기기에 저장된다.</p>
   </div>
 </div>
 
