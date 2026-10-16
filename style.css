@@ -369,6 +369,10 @@ h1 { font-size: 18px; margin: 0; }
 /* 결과 화면의 월급 한 줄 */
 #overlay #wage { color: #7fd6a8; font-size: 12px; }
 /* 기록 */
+.dialog .tabs { display: flex; gap: 6px; margin: 4px 0 12px; }
+.dialog .tabs:empty { display: none; }
+.dialog .tabs button { flex: 1; color: var(--muted); }
+.dialog .tabs button[aria-pressed="true"] { background: var(--accent); color: #1d1a22; }
 .dialog .stats { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 4px 0 0; }
 .dialog .stats dt { color: var(--muted); }
 .dialog .stats dd { margin: 0; text-align: right; color: var(--accent); }

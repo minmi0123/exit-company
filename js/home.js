@@ -237,6 +237,15 @@ const HOME = {
       : HOME_ROOMS[floor] + '. 다음 방으로 가는 문을 찾자. 유혹을 모두 뿌리치면 강화 보너스!'),
     exitLocked: (left) => '아직 누울 수 없다. 남은 유혹 ' + left + '개를 먼저 뿌리치자.',
     exitOpen: '유혹이 모두 사라졌다. 이제 누울 수 있다!',
+    records: {
+      plays: '귀가', clears: '취침 성공', earliest: '가장 이른 취침', fastest: '가장 빠른 취침',
+      kills: '뿌리친 유혹', killUnit: '개', onTime: ' 오자마자 잠들었다!',
+      reached: (best) => (best === 0 ? '침대에 누움' : HOME_ROOMS[best]),
+      recentTitle: '최근 잠들기',
+      win: '취침 성공',
+      lose: (floor) => HOME_ROOMS[floor] + '에서 의지 박약',
+      empty: '아직 끝낸 판이 없다. 퇴근하기에서 2탄을 골라 보자.',
+    },
   },
 };
 

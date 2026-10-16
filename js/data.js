@@ -301,6 +301,16 @@ const COMPANY = {
       : floor + 'F. 계단으로 내려가자. 모두 퇴근시키면 강화 보너스!'),
     exitLocked: (left) => '로비 문이 잠겨 있다. 남은 적 ' + left + '명을 먼저 퇴근시키자.',
     exitOpen: '모두 퇴근했다. 로비 문이 열렸다!',
+    // 기록 화면 (js/ui.js 의 buildRecords). onTime = 가장 이른 시각이 시작 시각 그대로일 때 덧붙이는 말
+    records: {
+      plays: '출근', clears: '퇴근 성공', earliest: '가장 이른 퇴근', fastest: '가장 빠른 퇴근',
+      kills: '퇴근시킨 적', killUnit: '명', onTime: ' 정시 퇴근!',
+      reached: (best) => (best === 0 ? '1F 로비 탈출' : best + 'F'),
+      recentTitle: '최근 퇴근길',
+      win: '퇴근 성공',
+      lose: (floor) => floor + 'F 에서 멘탈 붕괴',
+      empty: '아직 끝낸 판이 없다. 퇴근하기로 첫 출근을 해 보자.',
+    },
   },
 };
 

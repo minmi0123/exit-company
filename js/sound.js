@@ -101,6 +101,11 @@ function notes(wave, freqs, gap, dur, vol, delay = 0) {
 const SFX = {
   // 걸음: 뽁 · 뾱 번갈아 (발마다 음 높이가 다르다)
   step: (alt) => tone('sine', alt ? 1100 : 900, alt ? 450 : 380, 0.06, 0.6),
+  // 현관문 열림: 철컥 (2탄 시작 연출)
+  door: () => {
+    tone('square', 620, 420, 0.04, 0.4);
+    tone('square', 480, 300, 0.06, 0.4, 0.07);
+  },
   // 키보드로 때림: 퍽
   attack: () => {
     tone('square', 260, 90, 0.09, 0.5);

@@ -113,19 +113,16 @@ window.addEventListener('keydown', (e) => {
       e.preventDefault();
       closeDialog();
     } else if (dialog === 'stages') {
-      // Enter = 첫 탄 · 숫자 = 그 번호의 탄 · T = 오늘의 출근
+      // Enter = 첫 탄 · 숫자 = 그 번호의 탄
       // 탄 버튼에 포커스가 있으면 Enter 는 그 버튼이 맡는다
       if (ok && document.activeElement && document.activeElement.closest('#stageList')) return;
       const stage = STAGES[Number((e.code.match(/^(?:Digit|Numpad)(\d)$/) || [])[1]) - 1];
-      if (e.code === 'KeyT') {
-        e.preventDefault();
-        startGame(true);
-      } else if (ok) {
+      if (ok) {
         e.preventDefault();
         startGame();
       } else if (stage && stageOpen(stage)) {
         e.preventDefault();
-        startGame(false, stage);
+        startGame(stage);
       }
     }
     return; // 환경설정 창에선 키보드로 슬라이더·체크박스를 다룰 수 있게 둔다
@@ -221,15 +218,37 @@ const SCENE_MONITOR = [
   'oooooooooooo',
 ];
 
-// walk = 시작 연출에서 신입사원이 왼쪽으로 걸어간 거리(도트). null 이면 자리에 앉아 일하는 중
-function buildTitleScene(blink, walk = null) {
-  const g = Array.from({ length: SCENE_H }, () => Array(SCENE_W).fill('b'));
+// 그림 판(색 글자 2차원 배열)에 칠하는 도구: fill = 네모 칠하기 · stamp = 도트 그림 찍기 (판 밖은 자른다)
+function sceneTools(g) {
   const fill = (x0, y0, w, h, ch) => {
     for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) g[y][x] = ch;
   };
   const stamp = (rows, x0, y0) => rows.forEach((row, y) => [...row].forEach((ch, x) => {
-    if (ch !== '.' && x0 + x >= 0 && x0 + x < SCENE_W) g[y0 + y][x0 + x] = ch;
+    if (ch !== '.' && x0 + x >= 0 && x0 + x < SCENE_W && y0 + y >= 0 && y0 + y < SCENE_H) g[y0 + y][x0 + x] = ch;
   }));
+  return { fill, stamp };
+}
+
+// 벽시계 (왼쪽 위). time = '1800' 처럼 숫자 네 개, colon = 가운데 콜론을 켤지 (깜빡일 때 번갈아)
+function drawSceneClock(g, time, colon) {
+  const { fill } = sceneTools(g);
+  fill(3, 2, 23, 9, 'o');
+  fill(4, 3, 21, 7, 'K');
+  [6, 10, 16, 20].forEach((x, i) => {
+    PIXEL_FONT[time[i]].forEach((row, dy) => [...row].forEach((bit, dx) => {
+      if (bit === '1') g[4 + dy][x + dx] = 'R';
+    }));
+  });
+  if (colon) {
+    g[5][14] = 'R';
+    g[7][14] = 'R';
+  }
+}
+
+// walk = 시작 연출에서 신입사원이 왼쪽으로 걸어간 거리(도트). null 이면 자리에 앉아 일하는 중
+function buildTitleScene(blink, walk = null) {
+  const g = Array.from({ length: SCENE_H }, () => Array(SCENE_W).fill('b'));
+  const { fill, stamp } = sceneTools(g);
 
   // 벽 · 걸레받이 · 바닥
   fill(0, 17, SCENE_W, 3, 'c');
@@ -237,17 +256,7 @@ function buildTitleScene(blink, walk = null) {
   fill(0, 22, SCENE_W, SCENE_H - 22, 'f');
 
   // 벽시계 18:00 (콜론이 깜빡인다)
-  fill(3, 2, 23, 9, 'o');
-  fill(4, 3, 21, 7, 'K');
-  [['1', 6], ['8', 10], ['0', 16], ['0', 20]].forEach(([ch, x]) => {
-    PIXEL_FONT[ch].forEach((row, dy) => [...row].forEach((bit, dx) => {
-      if (bit === '1') g[4 + dy][x + dx] = 'R';
-    }));
-  });
-  if (blink) {
-    g[5][14] = 'R';
-    g[7][14] = 'R';
-  }
+  drawSceneClock(g, '1800', blink);
 
   // 신입사원 (책상 위로 상반신만 보인다). 걸을 땐 한 걸음마다 살짝 들썩인다
   if (walk === null) stamp(HERO_BODY.slice(0, 11), 16, 10);
@@ -279,6 +288,44 @@ function buildTitleScene(blink, walk = null) {
     g[blink ? 21 : 20][28] = 's';
   }
 
+  return g;
+}
+
+// 2탄 시작 연출 그림: 집 현관. 21:00 벽시계 + 오른쪽 현관문 (문 너머는 밤)
+// open = 문이 열린 정도 (0 닫힘 ~ 3 활짝) · hero = 신입사원 { x, y, step } (null 이면 아직 문 밖)
+const HOME_DOOR_PANEL = [10, 7, 4, 1]; // 열린 정도별 문짝 너비 (경첩은 오른쪽)
+function buildHomeScene(open, hero = null) {
+  const g = Array.from({ length: SCENE_H }, () => Array(SCENE_W).fill('N'));
+  const { fill, stamp } = sceneTools(g);
+
+  // 줄무늬 벽지 · 벽 그림자 · 나무 걸레받이 · 마룻바닥 (2탄 칸 그림과 같은 색)
+  for (let x = 3; x < SCENE_W; x += 4) fill(x, 0, 1, 18, 'M');
+  fill(0, 18, SCENE_W, 2, 'M');
+  fill(0, 20, SCENE_W, 2, 'D');
+  fill(0, 22, SCENE_W, SCENE_H - 22, 'F');
+  fill(0, 25, SCENE_W, 1, 'H');
+  fill(0, 29, SCENE_W, 1, 'H');
+  [[7, 22, 3], [27, 22, 3], [17, 26, 3], [39, 26, 3], [11, 30, 2], [33, 30, 2]].forEach(([x, y, h]) => fill(x, y, 1, h, 'H'));
+
+  // 벽시계 21:00
+  drawSceneClock(g, '2100', true);
+
+  // 현관문: 바깥 테두리 · 나무 문틀 · 문 너머 밤하늘(별 둘) · 오른쪽에 붙은 문짝
+  fill(32, 3, 14, 19, 'o');
+  fill(33, 4, 12, 18, 'D');
+  fill(34, 5, 10, 17, 'z');
+  g[8][36] = 'y';
+  g[11][40] = 'P';
+  const w = HOME_DOOR_PANEL[open];
+  fill(44 - w, 5, w, 17, 'e');
+  fill(44 - w, 5, 1, 17, 'o'); // 문짝 왼쪽 끝
+  if (w >= 4) g[13][44 - w + 2] = 'y'; // 손잡이
+
+  // 현관 매트
+  fill(33, 22, 12, 1, 'I');
+  fill(33, 23, 12, 1, 'J');
+
+  if (hero) stamp([...HERO_BODY, ...(hero.step ? HERO_LEGS_B : HERO_LEGS_A)], hero.x, hero.y);
   return g;
 }
 
@@ -327,25 +374,61 @@ function showTitle() {
   document.getElementById('title').className = 'show';
 }
 
-// 시작 연출: 18:00 이 되자 자리에서 일어나 왼쪽으로 걸어 나간다. 끝나면 게임 시작.
+// 시작 연출: 탄을 고르면 시작화면 그림 자리에서 짧은 장면을 보여 주고 게임을 시작한다.
 // 짧게(0.7초쯤) 하고, 아무 키·터치로 건너뛸 수 있다. 움직임 줄이기를 켠 기기에선 생략한다
 const INTRO = { every: 45, px: 2, stride: 4 }; // every ms 마다 px 도트씩, stride 도트마다 한 걸음
+const HOME_INTRO = { door: 4, walk: 16, hold: 3 }; // 문 여는 장수(닫힘 → 활짝) · 들어와서 걷는 거리(도트) · 다 들어와서 서 있는 장수
 let intro = null;
 
-function playIntro(done) {
+// 탄 id → 연출. line = 그림 아래 한 줄 · frame(t) = t 번째(1부터) 그림, null 이면 끝 (걸음 소리도 여기서 낸다)
+// 연출이 없는 탄은 바로 시작한다
+const INTROS = {
+  // 1탄: 18:00 이 되자 자리에서 일어나 왼쪽으로 걸어 나간다
+  company: {
+    line: '18:00. 칼퇴 간다!',
+    frame: (t) => {
+      const walk = t * INTRO.px;
+      if (16 - walk <= -14) return null; // 화면 밖으로 다 나갔다
+      if (walk % (INTRO.stride * 2) === 0) sfx('step', (walk / (INTRO.stride * 2)) % 2);
+      return buildTitleScene(false, walk);
+    },
+  },
+  // 2탄: 21:00, 현관문을 열고 들어와 매트를 지나 선다 (2026-10-11 기획자 확정)
+  home: {
+    line: '21:00. 드디어 집이다.',
+    frame: (t) => {
+      if (t <= HOME_INTRO.door) {
+        if (t === 1) sfx('door');
+        return buildHomeScene(t - 1);
+      }
+      const moved = (t - HOME_INTRO.door - 1) * INTRO.px;
+      if (moved > HOME_INTRO.walk + HOME_INTRO.hold * INTRO.px) return null;
+      const walk = Math.min(moved, HOME_INTRO.walk);
+      const walking = moved < HOME_INTRO.walk;
+      if (moved <= HOME_INTRO.walk && walk % (INTRO.stride * 2) === 0) sfx('step', (walk / (INTRO.stride * 2)) % 2);
+      // 문간(31, 6)에서 왼쪽으로 걸으며 바닥 쪽으로 4도트 내려온다
+      return buildHomeScene(HOME_DOOR_PANEL.length - 1, {
+        x: 31 - walk,
+        y: 6 + Math.min(4, Math.floor(walk / 3)),
+        step: walking && Math.floor(walk / INTRO.stride) % 2 === 1,
+      });
+    },
+  },
+};
+
+function playIntro(scene, done) {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
   document.getElementById('title').classList.add('leaving');
-  document.getElementById('titleSub').textContent = '18:00. 칼퇴 간다!';
-  let walk = 0;
-  intro = {
-    done,
-    timer: setInterval(() => {
-      walk += INTRO.px;
-      if (16 - walk <= -14) return endIntro(); // 화면 밖으로 다 나갔다
-      renderScene(buildTitleScene(false, walk), titleArt);
-      if (walk % (INTRO.stride * 2) === 0) sfx('step', (walk / (INTRO.stride * 2)) % 2);
-    }, INTRO.every),
+  document.getElementById('titleSub').textContent = scene.line;
+  let t = 0;
+  const tick = () => {
+    t += 1;
+    const grid = scene.frame(t);
+    if (!grid) return endIntro();
+    renderScene(grid, titleArt);
   };
+  intro = { done, timer: setInterval(tick, INTRO.every) };
+  tick(); // 첫 장은 바로 (2탄은 사무실 그림이 남아 보이지 않게)
 }
 
 function endIntro() {
@@ -373,23 +456,17 @@ function setStage(stage) {
   refreshOutfit(); // 옷을 따로 안 골랐으면 탄의 기본 옷으로 바뀐다
 }
 
-// daily = 오늘의 출근 (날짜 시드, 첫 탄에서 한다)
-function startGame(daily = false, stage = STAGES[0]) {
+function startGame(stage = STAGES[0]) {
   closeDialog();
   if (intro) return;
-  // 시작 연출은 사무실에서 걸어 나가는 그림이라 1탄에서만 보여 준다
-  const begin = stage === STAGES[0] ? playIntro : (done) => done();
+  const scene = INTROS[stage.id];
+  const begin = scene ? (done) => playIntro(scene, done) : (done) => done();
   begin(() => {
     state.screen = 'play';
     document.getElementById('title').className = '';
     setStage(stage);
-    if (daily) {
-      startDaily();
-      newRun(todayKey(), true);
-    } else {
-      newRun(pendingSeed || randomSeed());
-      pendingSeed = null;
-    }
+    newRun(pendingSeed || randomSeed());
+    pendingSeed = null;
     const rec = loadRecords();
     rec.plays += 1;
     saveJson(storeKey('records'), rec);
@@ -494,7 +571,10 @@ function openDialog(id) {
   el.classList.add('show');
   el.querySelector('.panel').scrollTop = 0;
   if (id === 'dex') buildDex();
-  if (id === 'records') buildRecords();
+  if (id === 'records') {
+    recordStage = stageOpen(STAGE) ? STAGE : STAGES[0];
+    buildRecords();
+  }
   if (id === 'stages') buildStageList();
   if (id === 'shop') buildShop();
 }
@@ -552,7 +632,6 @@ function buildShop() {
 }
 
 // 탄 고르기 — data.js 의 STAGES 로 만든다. 열 때마다 최고 기록을 새로 읽는다
-// 오늘의 출근은 맨 위에 둔다 (2026-10-11 기획자 요청)
 function buildStageList() {
   const list = document.getElementById('stageList');
   list.innerHTML = '';
@@ -577,57 +656,56 @@ function buildStageList() {
     list.append(btn);
     return btn;
   };
-  const d = loadDaily();
-  button('오늘의 출근 · ' + dayLabel(d.date),
-    ['오늘 하루는 누구나 같은 회사. 몇 번이든 다시 도전할 수 있다', dailyText(d)],
-    () => startGame(true)).id = 'stageDaily';
   STAGES.forEach((stage) => {
     const lines = [stage.desc];
     if (stageOpen(stage)) lines.push(bestText(stage));
     else if (stage.open) lines.push(STAGES.find((s) => s.id === stage.requires).name.split(' ')[0] + '을 깨면 열린다');
-    button(stage.name, lines, stageOpen(stage) ? () => startGame(false, stage) : null);
+    button(stage.name, lines, stageOpen(stage) ? () => startGame(stage) : null);
   });
 }
 
-// 오늘의 출근 한 줄: "오늘 최고 1234점 · 3번 도전 · 연속 출근 4일"
-function dailyText(d) {
-  const parts = [];
-  if (d.tries === 0) parts.push('오늘은 아직 출근 전');
-  else {
-    if (d.bestScore !== null) parts.push('오늘 최고 ' + d.bestScore + '점');
-    else if (d.bestFloor !== null) parts.push('오늘 ' + d.bestFloor + 'F 까지');
-    parts.push(d.tries + '번 도전');
-  }
-  if (d.streak >= 2) parts.push('연속 출근 ' + d.streak + '일');
-  return parts.join(' · ');
-}
+// 기록 — 탄마다 따로 보여 준다. 열 때마다 저장된 값을 읽어 새로 만든다
+// 열린 탄이 둘 이상이면 위에 탄 단추가 생긴다. 창을 열면 마지막에 한 탄(STAGE)부터 보여 준다
+// 말(출근 · 퇴근 성공 …)은 탄 묶음의 text.records
+let recordStage = STAGES[0];
 
-// 기록 — 열 때마다 저장된 값을 읽어 새로 만든다
-// (위쪽 표와 최근 판은 1탄 기록. 다른 탄은 최고 기록 한 줄씩 덧붙인다)
 function buildRecords() {
-  const first = STAGES[0];
-  const clockOf1 = (overtime) => clockOf(overtime, first);
-  const rec = loadRecords(first);
+  const stage = recordStage;
+  const t = stage.text.records;
+  const rec = loadRecords(stage);
   const dex = loadDex();
-  const daily = loadDaily();
-  const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
-  const best = loadBest(first);
-  const score = loadBestScore(first);
+  // 도감은 탄을 가리지 않고 한곳에 모으므로, 이 탄의 적 · 아이템만 더한다
+  const sum = (counts, kinds) => Object.keys(kinds).reduce((a, k) => a + (counts[k] || 0), 0);
+  const best = loadBest(stage);
+  const score = loadBestScore(stage);
   const none = '—';
-  const rows = [
-    ['출근', rec.plays + '번'],
-    ['퇴근 성공', rec.clears + '번' + (rec.plays ? ' (' + Math.min(100, Math.round(100 * rec.clears / rec.plays)) + '%)' : '')],
-    ['최고 점수', score === null ? none : score + '점'],
-    ['가장 이른 퇴근', rec.bestOvertime === null ? none : clockOf1(rec.bestOvertime) + (rec.bestOvertime === 0 ? ' 정시 퇴근!' : '')],
-    ['가장 빠른 퇴근', rec.bestTurns === null ? none : rec.bestTurns + '턴'],
-    ['가장 멀리 간 곳', best === null ? none : best === 0 ? '1F 로비 탈출' : best + 'F'],
-    ['퇴근시킨 적', sum(dex.enemies) + '명'],
-    ['먹은 아이템', sum(dex.items) + '개'],
-    ['연속 출근', daily.streak ? daily.streak + '일 (오늘의 출근)' : none],
-  ];
-  for (const stage of STAGES.slice(1)) {
-    if (stageOpen(stage)) rows.push([stage.name, bestText(stage).replace('최고 기록: ', '') || none]);
+
+  const tabs = document.getElementById('recordTabs');
+  tabs.innerHTML = '';
+  const open = STAGES.filter(stageOpen);
+  if (open.length > 1) {
+    for (const s of open) {
+      const btn = document.createElement('button');
+      btn.textContent = s.name;
+      btn.setAttribute('aria-pressed', String(s === stage));
+      btn.addEventListener('click', () => {
+        recordStage = s;
+        buildRecords();
+      });
+      tabs.append(btn);
+    }
   }
+
+  const rows = [
+    [t.plays, rec.plays + '번'],
+    [t.clears, rec.clears + '번' + (rec.plays ? ' (' + Math.min(100, Math.round(100 * rec.clears / rec.plays)) + '%)' : '')],
+    ['최고 점수', score === null ? none : score + '점'],
+    [t.earliest, rec.bestOvertime === null ? none : clockOf(rec.bestOvertime, stage) + (rec.bestOvertime === 0 ? t.onTime : '')],
+    [t.fastest, rec.bestTurns === null ? none : rec.bestTurns + '턴'],
+    ['가장 멀리 간 곳', best === null ? none : t.reached(best)],
+    [t.kills, sum(dex.enemies, stage.enemies) + t.killUnit],
+    ['먹은 아이템', sum(dex.items, stage.items) + '개'],
+  ];
   const stats = document.getElementById('recordStats');
   stats.innerHTML = '';
   for (const [k, v] of rows) {
@@ -639,12 +717,13 @@ function buildRecords() {
     stats.append(dt, dd);
   }
 
+  document.getElementById('recordRecentTitle').textContent = t.recentTitle;
   const recent = document.getElementById('recordRecent');
   recent.innerHTML = '';
   if (!rec.recent.length) {
     const li = document.createElement('li');
     li.className = 'none';
-    li.textContent = '아직 끝낸 판이 없다. 퇴근하기로 첫 출근을 해 보자.';
+    li.textContent = t.empty;
     recent.append(li);
   }
   for (const r of rec.recent) {
@@ -654,10 +733,10 @@ function buildRecords() {
     day.textContent = (Math.floor(r.date / 100) % 100) + '/' + (r.date % 100);
     const what = document.createElement('span');
     what.className = r.cleared ? 'win' : 'lose';
-    what.textContent = r.cleared ? clockOf1(r.overtime) + ' 퇴근 성공' : r.floor + 'F 에서 멘탈 붕괴';
+    what.textContent = r.cleared ? clockOf(r.overtime, stage) + ' ' + t.win : t.lose(r.floor);
     const detail = document.createElement('span');
     detail.className = 'detail';
-    detail.textContent = (r.cleared ? r.score + '점' : r.turn + '턴') + (r.daily ? ' · 오늘의 출근' : '');
+    detail.textContent = r.cleared ? r.score + '점' : r.turn + '턴';
     li.append(day, what, detail);
     recent.append(li);
   }
