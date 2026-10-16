@@ -152,8 +152,7 @@ function draw() {
 
   // 바닥 아이템 · 일기 쪽지: 둥둥 떠 있다. 칸마다 박자를 어긋나게 해서 한꺼번에 움직이지 않게
   const floating = state.items.map((it) => [SPRITES[it.kind], it]);
-  const note = noteOnFloor();
-  if (note) floating.push([SPRITES.note, note]);
+  for (const note of notesOnFloor()) floating.push([SPRITES.note, note]);
   for (const [img, it] of floating) {
     const phase = (now / BOB_MS + (it.x * 7 + it.y * 3) / 10) * Math.PI * 2;
     const bob = Math.round((Math.sin(phase) - 1) * 1.5); // 0 ~ -3px (위로만 뜬다)
