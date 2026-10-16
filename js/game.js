@@ -26,6 +26,7 @@ const state = {
   map: null,
   enemies: [],
   items: [],          // 바닥에 떨어진 아이템
+  note: null,         // 이번 판의 일기 쪽지 { page, floor, x, y, taken } (없는 판은 null)
   bag: emptyBag(),
   buffs: {},          // 쓴 아이템의 남은 효과 턴 { annual: 3 } — 무적·공격력 같은 효과는 아이템 표에서 읽는다
   grab: null,         // 붙잡힘 { by: 붙잡은 적, turns: 남은 턴 }
@@ -47,6 +48,7 @@ function enterFloor(floorNo) {
   state.map = generateFloor(floorNo, rng);
   state.enemies = spawnEnemies(state.map, floorNo, rng);
   state.items = spawnItems(state.map, state.enemies, rng);
+  placeNote(floorNo);
   const h = state.hero;
   h.x = state.map.start.x;
   h.y = state.map.start.y;
@@ -155,9 +157,51 @@ function newRun(seed = randomSeed()) {
   state.clockTurns = 0;   // 보스 없이 흐른 턴 (시계용)
   state.stats = { kills: 0, items: 0 };
   state.over = false;
+  state.note = pickNote();
   clearTimeout(overlayTimer);
   document.getElementById('overlay').className = '';
   enterFloor(STAGE.topFloor);
+}
+
+// 일기 쪽지 (탄 묶음의 diary): 한 판에 한 장까지, 아직 안 모은 장 중에서 무작위 · 무작위 층
+// 맵 · 적 · 아이템과 다른 난수를 쓴다 — 쪽지가 있든 없든 같은 시드면 같은 맵이 나온다
+const DIARY_KEY = 'exit-company.diary'; // 모은 장 번호 (1부터) { company: [3, 7] }
+
+function diaryPages(stage = STAGE) {
+  return loadJson(DIARY_KEY)[stage.id] || [];
+}
+
+function saveDiaryPage(page, stage = STAGE) {
+  const d = loadJson(DIARY_KEY);
+  d[stage.id] = [...new Set([...(d[stage.id] || []), page])];
+  saveJson(DIARY_KEY, d);
+}
+
+function pickNote() {
+  if (!STAGE.diary) return null;
+  const got = diaryPages();
+  const left = STAGE.diary.pages.map((_, i) => i + 1).filter((n) => !got.includes(n));
+  if (!left.length) return null; // 다 모았다
+  const rng = mulberry32(state.seed ^ 0xd1a7);
+  return { page: left[Math.floor(rng() * left.length)], floor: randInt(rng, 1, STAGE.topFloor), rng, taken: false };
+}
+
+// 쪽지 놓기: 그 층이면 시작점에서 4칸 이상 떨어진 빈 바닥 (적 · 아이템과 겹치지 않게)
+function placeNote(floorNo) {
+  const note = state.note;
+  if (!note || note.floor !== floorNo) return;
+  const dist = distances(state.map.grid, state.map.start);
+  const spots = [];
+  state.map.grid.forEach((row, y) => row.forEach((t, x) => {
+    if (t === '.' && dist[y][x] >= 4 && !enemyAt(x, y) && !state.items.some((it) => it.x === x && it.y === y)) spots.push({ x, y });
+  }));
+  if (spots.length) Object.assign(note, spots[Math.floor(note.rng() * spots.length)]);
+}
+
+// 지금 층 바닥에 놓여 있는 쪽지 (없으면 null)
+function noteOnFloor() {
+  const note = state.note;
+  return note && !note.taken && note.floor === state.floor && note.x !== undefined ? note : null;
 }
 
 function tileAt(x, y) {
@@ -394,6 +438,16 @@ function overtimeTick(boss) {
 
 function pickUp() {
   const h = state.hero;
+  const note = noteOnFloor();
+  if (note && note.x === h.x && note.y === h.y) {
+    // 일기 쪽지: 모은 장에 적고 종이 화면을 띄운다 (showDiary 는 ui.js). 가방 · 월급 · 점수와는 상관없다
+    note.taken = true;
+    saveDiaryPage(note.page);
+    sfx('paper');
+    say(STAGE.diary.pickup + ' (' + STAGE.diary.title + ' ' + note.page + ')');
+    showDiary(STAGE, note.page);
+    return;
+  }
   const item = state.items.find((it) => it.x === h.x && it.y === h.y);
   if (!item) return;
   state.items = state.items.filter((it) => it !== item);

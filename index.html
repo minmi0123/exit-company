@@ -89,12 +89,26 @@
       <h2 id="dexTitle">도감</h2>
       <button class="close">닫기</button>
     </div>
-    <p class="note" style="margin-top: 0">물리친 적과 먹은 아이템이 기록된다. 이 기기에 저장된다.</p>
+    <p class="note" style="margin-top: 0">물리친 적과 먹은 아이템, 주운 일기가 기록된다. 이 기기에 저장된다.</p>
     <h3>적 <span id="dexEnemyCount" class="count"></span></h3>
     <ul class="cards" id="dexEnemies"></ul>
     <h3>아이템 <span id="dexItemCount" class="count"></span></h3>
     <ul class="cards" id="dexItems"></ul>
+    <h3>일기 <span id="dexDiaryCount" class="count"></span></h3>
+    <p class="note" style="margin-top: 0">맵 어딘가에 떨어진 쪽지를 주우면 한 장씩 모인다.</p>
+    <ul class="diary" id="dexDiary"></ul>
   </div>
+</div>
+
+<!-- 일기 쪽지: 게임 중에 주우면 뜬다. 아무 키 · 화면 누르기로 닫는다 (js/ui.js 의 showDiary) -->
+<div id="diary" role="dialog" aria-modal="true" aria-labelledby="diaryTitle">
+  <div class="sheet">
+    <div class="paper">
+      <h2 id="diaryTitle"></h2>
+      <p id="diaryText"></p>
+    </div>
+  </div>
+  <p class="hint">아무 키나 누르거나 화면을 누르면 닫힌다</p>
 </div>
 
 <div id="shop" class="dialog" role="dialog" aria-modal="true" aria-labelledby="shopTitle">

@@ -150,13 +150,16 @@ function draw() {
     }
   }
 
-  // 바닥 아이템: 둥둥 떠 있다. 칸마다 박자를 어긋나게 해서 한꺼번에 움직이지 않게
-  for (const it of state.items) {
+  // 바닥 아이템 · 일기 쪽지: 둥둥 떠 있다. 칸마다 박자를 어긋나게 해서 한꺼번에 움직이지 않게
+  const floating = state.items.map((it) => [SPRITES[it.kind], it]);
+  const note = noteOnFloor();
+  if (note) floating.push([SPRITES.note, note]);
+  for (const [img, it] of floating) {
     const phase = (now / BOB_MS + (it.x * 7 + it.y * 3) / 10) * Math.PI * 2;
     const bob = Math.round((Math.sin(phase) - 1) * 1.5); // 0 ~ -3px (위로만 뜬다)
     ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';               // 그림자: 뜰수록 작아진다
     ctx.fillRect(it.x * TILE + 5 - bob / 2, it.y * TILE + 13, 6 + bob, 2);
-    ctx.drawImage(SPRITES[it.kind], it.x * TILE, it.y * TILE + bob);
+    ctx.drawImage(img, it.x * TILE, it.y * TILE + bob);
   }
 
   const enemyPos = state.enemies.map((e) => drawWalker(SPRITES[e.kind], e, now, e.type.scale || 1));

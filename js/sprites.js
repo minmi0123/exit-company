@@ -415,6 +415,26 @@ const COFFEE = [
   '................',
 ];
 
+// 일기 쪽지 (줄 쳐진 종이, 오른쪽 위 귀퉁이가 접혔다)
+const NOTE = [
+  '................',
+  '................',
+  '...ooooooooo....',
+  '...oPPPPPPPoo...',
+  '...oPLLLLLPBBo..',
+  '...oPPPPPPPPPo..',
+  '...oPLLLLLLLPo..',
+  '...oPPPPPPPPPo..',
+  '...oPLLLLLLLPo..',
+  '...oPPPPPPPPPo..',
+  '...oPLLLLLPPPo..',
+  '...oPPPPPPPPPo..',
+  '...ooooooooooo..',
+  '................',
+  '................',
+  '................',
+];
+
 // 아이템 — 연차 (달력에 동그라미 친 날)
 const ANNUAL = [
   '................',
@@ -821,4 +841,5 @@ const SPRITES = {
   water: makeSprite(WATER),
   dnd: makeSprite(DND),
   book: makeSprite(BOOK),
+  note: makeSprite(NOTE),
 };

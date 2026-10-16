@@ -52,7 +52,7 @@ function startHold(dir) {
   stopHold();
   hold.dir = dir;
   act(dir); // 첫 칸은 평소처럼 (적이 있으면 공격)
-  if (state.over || state.choosing) return;
+  if (state.over || state.choosing || diaryOpen()) return;
   hold.timer = setTimeout(holdStep, HOLD_DELAY);
 }
 
@@ -68,7 +68,7 @@ function nearbyEnemies() {
 }
 
 function holdStep() {
-  if (!hold.dir || state.over || state.choosing || state.screen === 'title') return stopHold();
+  if (!hold.dir || state.over || state.choosing || diaryOpen() || state.screen === 'title') return stopHold();
   const h = state.hero;
   const [dx, dy] = DIRS[hold.dir];
   const next = tileAt(h.x + dx, h.y + dy);
@@ -80,7 +80,7 @@ function holdStep() {
   const newEnemy = [...nearbyEnemies()].some((e) => !before.near.has(e));
   const adjacent = state.enemies.some((e) => Math.abs(e.x - h.x) + Math.abs(e.y - h.y) === 1);
   if (!moved || state.mental < before.mental || state.stats.items > before.items
-    || state.floor !== before.floor || newEnemy || adjacent || state.over || state.choosing) {
+    || state.floor !== before.floor || newEnemy || adjacent || state.over || state.choosing || diaryOpen()) {
     return stopHold();
   }
   hold.timer = setTimeout(holdStep, HOLD_EVERY);
@@ -99,6 +99,11 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const ok = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
+  if (diaryOpen()) { // 일기 쪽지를 읽는 중: 아무 키나 누르면 닫는다 (그 키로 움직이지는 않는다)
+    e.preventDefault();
+    closeDiary();
+    return;
+  }
   if (intro) { // 시작 연출 중: 아무 키나 누르면 건너뛴다
     e.preventDefault();
     endIntro();
@@ -165,6 +170,33 @@ window.addEventListener('keydown', (e) => {
   if (!dir) return;
   e.preventDefault();
   startHold(dir);
+});
+
+// 일기 쪽지 — 주우면 게임을 멈추고 종이 화면을 띄운다 (game.js 의 pickUp 이 부른다)
+// 아무 키 · 화면 누르기로 닫는다. 막 열렸을 때 걷던 손가락에 바로 닫히지 않게 잠깐은 무시한다
+const DIARY_GUARD_MS = 300;
+let diaryOpenedAt = 0;
+
+function diaryOpen() {
+  return document.getElementById('diary').classList.contains('show');
+}
+
+function showDiary(stage, page) {
+  stopHold();
+  document.getElementById('diaryTitle').textContent = stage.diary.title + ' ' + page;
+  document.getElementById('diaryText').textContent = stage.diary.pages[page - 1];
+  document.getElementById('diary').classList.add('show');
+  diaryOpenedAt = performance.now();
+}
+
+function closeDiary() {
+  if (performance.now() - diaryOpenedAt < DIARY_GUARD_MS) return;
+  document.getElementById('diary').classList.remove('show');
+}
+
+document.getElementById('diary').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  closeDiary();
 });
 
 document.querySelectorAll('#pad button').forEach((btn) => {
@@ -557,6 +589,29 @@ function buildDex() {
   fill('dexItems', 'dexItemCount', stages.flatMap((s) => Object.entries(s.items).map(([kind, t]) => [
     kind, SPRITES[kind], t.name, [[t.tag, 'tag'], [t.key + ' 키', 'tag where']], t.desc, '먹음',
   ])), 'items');
+
+  // 일기: 일기가 있는 탄마다 장 번호 순서로. 모은 장은 글까지, 못 모은 장은 ???
+  const diary = document.getElementById('dexDiary');
+  diary.innerHTML = '';
+  let got = 0;
+  let total = 0;
+  for (const s of stages.filter((st) => st.diary)) {
+    const pages = diaryPages(s);
+    s.diary.pages.forEach((text, i) => {
+      const seen = pages.includes(i + 1);
+      total += 1;
+      if (seen) got += 1;
+      const li = document.createElement('li');
+      if (!seen) li.className = 'unknown';
+      const b = document.createElement('b');
+      b.textContent = s.diary.title + ' ' + (i + 1);
+      const p = document.createElement('div');
+      p.textContent = seen ? text : '???';
+      li.append(b, p);
+      diary.append(li);
+    });
+  }
+  document.getElementById('dexDiaryCount').textContent = got + ' / ' + total;
 }
 
 // 창 (게임 방법 · 도감 · 탄 고르기 · 환경설정): 한 번에 하나만 연다
