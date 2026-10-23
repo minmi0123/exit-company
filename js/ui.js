@@ -204,9 +204,21 @@ function closeDiary() {
   document.getElementById('diary').classList.remove('show');
 }
 
+// 종이는 pointerdown 에 닫히므로, 같은 누르기의 click 이 아래에 있던 것(도감 창 바깥 → 도감 닫기 등)에 떨어진다.
+// 그 click 한 번은 버린다 (2026-10-23 기획자: 도감에서 일기를 닫으면 메인으로 나가 버림)
+let swallowClick = false;
+window.addEventListener('pointerdown', () => { swallowClick = false; }, true);
+window.addEventListener('click', (e) => {
+  if (!swallowClick) return;
+  swallowClick = false;
+  e.stopPropagation();
+  e.preventDefault();
+}, true);
+
 document.getElementById('diary').addEventListener('pointerdown', (e) => {
   e.preventDefault();
   closeDiary();
+  swallowClick = true;
 });
 
 document.querySelectorAll('#pad button').forEach((btn) => {
