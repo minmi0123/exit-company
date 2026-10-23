@@ -189,6 +189,16 @@ function showDiary(stage, page) {
   diaryOpenedAt = performance.now();
 }
 
+// 도감에서 탄 하나의 일기를 한 장으로: 모은 장은 글, 못 모은 장은 ... (장 순서 그대로)
+function showDiaryBook(stage) {
+  const pages = diaryPages(stage);
+  document.getElementById('diaryTitle').textContent = stage.name;
+  document.getElementById('diaryText').textContent = stage.diary.pages
+    .map((text, i) => (pages.includes(i + 1) ? text : '...')).join('\n');
+  document.getElementById('diary').classList.add('show');
+  diaryOpenedAt = performance.now();
+}
+
 function closeDiary() {
   if (performance.now() - diaryOpenedAt < DIARY_GUARD_MS) return;
   document.getElementById('diary').classList.remove('show');
@@ -590,28 +600,47 @@ function buildDex() {
     kind, SPRITES[kind], t.name, [[t.tag, 'tag'], [t.key + ' 키', 'tag where']], t.desc, '먹음',
   ])), 'items');
 
-  // 일기: 일기가 있는 탄마다 장 번호 순서로. 모은 장은 글까지, 못 모은 장은 ???
+  // 일기: 일기가 있는 탄마다 한 권. 누르면 모은 장을 한 장에 이어서 보여 준다 (못 모은 장은 ...)
+  //    한 장도 못 모은 탄은 ??? 로만 보이고 눌리지 않는다
   const diary = document.getElementById('dexDiary');
   diary.innerHTML = '';
   let got = 0;
   let total = 0;
   for (const s of stages.filter((st) => st.diary)) {
     const pages = diaryPages(s);
-    s.diary.pages.forEach((text, i) => {
-      const seen = pages.includes(i + 1);
-      total += 1;
-      if (seen) got += 1;
-      const li = document.createElement('li');
-      if (!seen) li.className = 'unknown';
-      const b = document.createElement('b');
-      b.textContent = s.diary.title + ' ' + (i + 1);
-      const p = document.createElement('div');
-      p.textContent = seen ? text : '???';
-      li.append(b, p);
-      diary.append(li);
-    });
+    const n = s.diary.pages.filter((_, i) => pages.includes(i + 1)).length;
+    total += s.diary.pages.length;
+    got += n;
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    const b = document.createElement('b');
+    b.textContent = s.name;
+    const p = document.createElement('div');
+    p.textContent = n ? s.diary.title + ' · ' + n + ' / ' + s.diary.pages.length + '장' : '???';
+    btn.append(b, p);
+    if (n) btn.addEventListener('click', () => showDiaryBook(s));
+    else { li.className = 'unknown'; btn.disabled = true; }
+    li.append(btn);
+    diary.append(li);
   }
   document.getElementById('dexDiaryCount').textContent = got + ' / ' + total;
+  showDexTab(dexTab);
+}
+
+// 도감 탭 — 마지막으로 본 탭을 기억한다 (창을 다시 열어도 그 탭)
+let dexTab = 'dexEnemyTab';
+
+function showDexTab(id) {
+  dexTab = id;
+  for (const btn of document.querySelectorAll('#dexTabs button')) {
+    const on = btn.dataset.tab === id;
+    btn.setAttribute('aria-pressed', String(on));
+    document.getElementById(btn.dataset.tab).hidden = !on;
+  }
+}
+
+for (const btn of document.querySelectorAll('#dexTabs button')) {
+  btn.addEventListener('click', () => showDexTab(btn.dataset.tab));
 }
 
 // 창 (게임 방법 · 도감 · 탄 고르기 · 환경설정): 한 번에 하나만 연다

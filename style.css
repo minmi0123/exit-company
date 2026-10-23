@@ -355,10 +355,12 @@ h1 { font-size: 18px; margin: 0; }
 .dialog .cards li.unknown .name b { color: var(--muted); }
 .dialog .cards .seen { color: #7fd6a8; font-size: 12px; }
 .dialog .diary { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.dialog .diary li { padding: 8px 10px; background: #fbf6e4; color: #2d3f7a; border-radius: 4px; font-size: 14px; }
-.dialog .diary li b { display: block; margin-bottom: 2px; color: #b04a5a; font-size: 12px; font-weight: normal; }
-.dialog .diary li.unknown { background: var(--bg); color: #5d5768; }
+.dialog .diary li button { display: block; width: 100%; padding: 10px 12px; text-align: left; background: #fbf6e4; color: #2d3f7a; border-radius: 4px; font-size: 14px; }
+.dialog .diary li b { display: block; margin-bottom: 2px; color: #b04a5a; font-size: 15px; font-weight: normal; }
+.dialog .diary li.unknown button { background: var(--bg); color: #5d5768; cursor: default; }
 .dialog .diary li.unknown b { color: var(--muted); }
+.dialog .tabs .count { font-size: 12px; opacity: 0.8; }
+.dialog .tab[hidden] { display: none; }
 /* 일기 쪽지 — 크림색 줄 종이 + 왼쪽 빨간 여백선 + 접힌 귀퉁이. 글 줄 높이를 종이 줄 간격(28px)에 맞춘다
    (그림자는 기울인 바깥 .sheet 에 — 안쪽 .paper 는 귀퉁이를 잘라 내서 그림자까지 잘린다) */
 #diary {
